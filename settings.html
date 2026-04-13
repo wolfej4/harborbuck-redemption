@@ -43,34 +43,6 @@ header {
 .wrap { max-width: 680px; margin: 0 auto; padding: 36px 40px 60px; }
 .page-title { font-family: 'Playfair Display', serif; font-size: 1.9rem; font-weight: 700; color: var(--brass-light); margin-bottom: 24px; }
 
-/* ── PROFILE CARD ── */
-.profile-card {
-  background: var(--navy-mid);
-  border: 1px solid var(--rule);
-  border-top: 3px solid var(--brass);
-  padding: 24px 28px;
-  margin-bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-.avatar {
-  width: 64px; height: 64px;
-  background: var(--brass-dim);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 1.4rem; font-weight: 600; color: var(--navy);
-  flex-shrink: 0;
-}
-.profile-info .name { font-size: 1.1rem; font-weight: 600; color: var(--cream); }
-.profile-info .meta { font-family: 'IBM Plex Mono', monospace; font-size: .7rem; color: var(--cream-dim); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 12px; }
-.badge { padding: 2px 8px; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; border: 1px solid; }
-.badge-admin { color: var(--brass); background: rgba(196,154,60,.12); border-color: rgba(196,154,60,.3); }
-.badge-user  { color: var(--cream-dim); background: transparent; border-color: rgba(176,166,148,.2); }
-.badge-mfa-totp  { color: #80d4aa; background: rgba(46,125,82,.12); border-color: rgba(46,125,82,.3); }
-.badge-mfa-email { color: #80b4e0; background: rgba(46,82,125,.12); border-color: rgba(46,82,125,.3); }
-.badge-mfa-none  { color: var(--cream-dim); background: transparent; border-color: rgba(176,166,148,.2); }
-
 /* ── SETTINGS SECTIONS ── */
 .settings-section {
   background: var(--navy-mid);
@@ -161,19 +133,6 @@ input[readonly] { opacity: .55; cursor: not-allowed; border-bottom-style: dashed
 
 <div class="wrap">
   <div class="page-title">Account Settings</div>
-
-  <!-- PROFILE CARD -->
-  <div class="profile-card">
-    <div class="avatar" id="avatar">⚓</div>
-    <div class="profile-info">
-      <div class="name" id="profile-name">—</div>
-      <div class="meta">
-        <span id="profile-initials-badge"></span>
-        <span id="profile-role-badge"></span>
-        <span id="profile-mfa-badge"></span>
-      </div>
-    </div>
-  </div>
 
   <!-- EMAIL -->
   <div class="settings-section">
@@ -267,21 +226,6 @@ async function init() {
     currentUser    = me;
     smtpConfigured = cfg.smtpConfigured;
 
-    const initials = (me.initials && me.initials.trim())
-      ? me.initials.trim().toUpperCase()
-      : (me.username ? me.username.slice(0, 2).toUpperCase() : null);
-
-    document.getElementById('avatar').textContent    = initials || '⚓';
-    document.getElementById('avatar').style.fontSize = initials ? '1.4rem' : '1.9rem';
-    document.getElementById('profile-name').textContent = me.username || '—';
-    document.getElementById('profile-initials-badge').innerHTML = initials
-      ? `<span class="badge" style="color:var(--brass-light);background:rgba(196,154,60,.12);border-color:rgba(196,154,60,.3)">${initials}</span>`
-      : `<span class="badge" style="color:var(--cream-dim);border-color:rgba(176,166,148,.2)">No initials set</span>`;
-    document.getElementById('profile-role-badge').innerHTML =
-      `<span class="badge badge-${me.role}">${me.role}</span>`;
-    document.getElementById('profile-mfa-badge').innerHTML =
-      `<span class="badge badge-mfa-${me.mfa_type}">MFA: ${me.mfa_type}</span>`;
-
     if (me.role === 'admin') document.getElementById('admin-link').style.display = 'inline';
 
     document.getElementById('email-input').value = me.email || '';
@@ -295,9 +239,6 @@ async function init() {
     updateMfaNote();
 
   } catch(e) {
-    document.getElementById('avatar').textContent       = '!';
-    document.getElementById('avatar').style.background  = 'var(--red-dim)';
-    document.getElementById('profile-name').textContent = 'Error loading profile';
     console.error('Settings init error:', e);
   }
 }
@@ -395,7 +336,6 @@ async function saveMFA() {
       return;
     }
     currentUser.mfa_type = mfaType;
-    document.getElementById('profile-mfa-badge').innerHTML = `<span class="badge badge-mfa-${mfaType}">MFA: ${mfaType}</span>`;
     document.getElementById('mfa-note').textContent = '';
     toast('MFA updated.', 'success');
   } catch(e) { showMsg('mfa-msg', 'Network error.', 'error'); }
