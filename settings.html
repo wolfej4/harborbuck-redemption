@@ -109,10 +109,33 @@ input[readonly] { opacity: .55; cursor: not-allowed; border-bottom-style: dashed
 .msg.error   { color: #e08080; background: rgba(192,57,43,.12); border-color: var(--red); }
 
 /* ── TOAST ── */
-.toast { position: fixed; bottom: 24px; right: 24px; background: var(--navy-light); border-left: 3px solid var(--brass); color: var(--cream); font-family: 'IBM Plex Mono', monospace; font-size: .76rem; padding: 10px 16px; z-index: 200; opacity: 0; transform: translateY(8px); transition: all .2s; pointer-events: none; }
-.toast.show { opacity: 1; transform: translateY(0); }
+.toast {
+  position: fixed;
+  bottom: 28px; right: 28px;
+  min-width: 220px; max-width: 340px;
+  background: var(--navy-mid);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--brass);
+  color: var(--cream);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: .76rem;
+  padding: 13px 18px;
+  z-index: 300;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity .22s ease, transform .22s ease;
+  pointer-events: none;
+  display: flex; align-items: center; gap: 10px;
+}
+.toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.toast-icon { font-size: 1rem; flex-shrink: 0; }
 .toast.success { border-left-color: #3da66e; }
+.toast.success .toast-icon::before { content: '✓'; color: #3da66e; }
 .toast.error   { border-left-color: var(--red); }
+.toast.error   .toast-icon::before { content: '✕'; color: #e08080; }
+.toast.info    { border-left-color: var(--brass); }
+.toast.info    .toast-icon::before { content: '·'; color: var(--brass); font-size:1.4rem; line-height:0; }
 
 ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--navy); } ::-webkit-scrollbar-thumb { background: var(--brass-dim); }
 </style>
@@ -404,15 +427,22 @@ function showMsg(id, msg, type) {
 }
 
 let toastTimer;
-function toast(msg, type = '') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
+function toast(msg, type = 'info') {
+  const el  = document.getElementById('toast');
+  const txt = document.getElementById('toast-msg');
+  txt.textContent = msg;
   el.className = `toast show ${type}`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
 init();
 </script>
+
+<div class="toast" id="toast" onclick="this.classList.remove('show')">
+  <span class="toast-icon"></span>
+  <span id="toast-msg"></span>
+</div>
+
 </body>
 </html>
