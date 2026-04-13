@@ -9,7 +9,10 @@ COPY package*.json ./
 RUN npm install --production
 
 COPY server.js ./
-COPY index.html login.html setup.html mfa.html mfa-setup.html ./public/
+COPY index.html login.html setup.html register.html \
+     mfa.html mfa-setup.html admin.html \
+     reset-request.html reset-confirm.html \
+     ./public/
 
 # SQLite data directory — mount a volume here
 VOLUME ["/data"]

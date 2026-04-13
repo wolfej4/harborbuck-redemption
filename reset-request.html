@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Harborbucks — Reset Password</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0c1a2e;--navy-mid:#132238;--navy-light:#1a3050;--brass:#c49a3c;--brass-light:#e0b84a;--brass-dim:#8a6a20;--cream:#f0e8d8;--cream-dim:#b8ad99;--red:#c0392b;--rule:rgba(196,154,60,0.25)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--navy);background-image:repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(196,154,60,.06) 39px,rgba(196,154,60,.06) 40px);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;padding:24px}
+.brand{text-align:center;margin-bottom:36px}
+.brand h1{font-family:'Playfair Display',serif;font-size:2.6rem;font-weight:900;color:var(--brass-light);letter-spacing:.04em;line-height:1}
+.brand p{font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--brass-dim);margin-top:6px}
+.card{background:var(--navy-mid);border:1px solid var(--rule);border-top:3px solid var(--brass);padding:36px 40px;width:100%;max-width:380px}
+.card-title{font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;color:var(--brass);border-bottom:1px solid var(--rule);padding-bottom:12px;margin-bottom:8px}
+.card-sub{font-size:.72rem;color:var(--cream-dim);margin-bottom:24px;line-height:1.6}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+label{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--brass-dim)}
+input{background:var(--navy-light);border:1px solid var(--rule);border-bottom:2px solid var(--brass-dim);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.92rem;padding:10px 12px;outline:none;transition:border-color .15s;width:100%}
+input::placeholder{color:rgba(176,166,148,.35)}
+input:focus{border-bottom-color:var(--brass-light);background:rgba(26,48,80,.8)}
+.btn{width:100%;margin-top:8px;background:var(--brass);color:var(--navy);border:none;font-family:'IBM Plex Mono',monospace;font-size:.8rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:13px;cursor:pointer;transition:background .15s}
+.btn:hover:not(:disabled){background:var(--brass-light)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.msg{font-size:.78rem;padding:12px 14px;margin-bottom:16px;border-left:3px solid;display:none}
+.msg.show{display:block}
+.msg.success{color:var(--brass-light);background:rgba(196,154,60,.08);border-color:var(--brass)}
+.msg.error{color:#e08080;background:rgba(192,57,43,.12);border-color:var(--red)}
+.back{font-size:.68rem;color:var(--brass-dim);text-decoration:none;display:inline-block;margin-top:16px}
+.back:hover{color:var(--brass)}
+</style></head><body>
+<div class="brand"><h1>⚓ Harborbucks</h1><p>Voucher Ledger — Internal Use Only</p></div>
+<div class="card">
+  <div class="card-title">Reset Password</div>
+  <div class="card-sub">Enter your email address and we'll send a reset link.</div>
+  <div class="msg" id="msg"></div>
+  <div id="form-area">
+    <div class="field"><label>Email Address</label><input id="email" type="email" placeholder="you@example.com" autofocus></div>
+    <button class="btn" id="btn" onclick="submit()">Send Reset Link</button>
+  </div>
+  <a href="/login" class="back">← Back to login</a>
+</div>
+<script>
+document.getElementById('email').addEventListener('keydown',e=>{ if(e.key==='Enter') submit(); });
+async function submit(){
+  const email=document.getElementById('email').value.trim();
+  const btn=document.getElementById('btn');
+  if(!email) return showMsg('Enter your email address.','error');
+  btn.disabled=true; btn.textContent='Sending…';
+  try{
+    const res=await fetch('/auth/reset-request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
+    const d=await res.json();
+    if(!res.ok) return showMsg(d.error||'Failed to send.','error');
+    document.getElementById('form-area').innerHTML='';
+    showMsg('If an account with that email exists, a reset link has been sent. Check your inbox.','success');
+  }catch(e){ showMsg('Network error.','error'); }
+  finally{ btn.disabled=false; btn.textContent='Send Reset Link'; }
+}
+function showMsg(m,t){const e=document.getElementById('msg');e.textContent=m;e.className=`msg show ${t}`}
+</script></body></html>

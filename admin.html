@@ -1,0 +1,374 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Harborbucks — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0c1a2e;--navy-mid:#132238;--navy-light:#1a3050;--brass:#c49a3c;--brass-light:#e0b84a;--brass-dim:#8a6a20;--cream:#f0e8d8;--cream-dim:#b8ad99;--red:#c0392b;--red-dim:#7d241b;--green:#2e7d52;--rule:rgba(196,154,60,0.25)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--navy);background-image:repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(196,154,60,.06) 39px,rgba(196,154,60,.06) 40px);color:var(--cream);font-family:'IBM Plex Sans',sans-serif;min-height:100vh}
+header{border-bottom:2px solid var(--brass);padding:20px 40px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(196,154,60,.08) 0%,transparent 100%)}
+.logo{font-family:'Playfair Display',serif;font-size:1.8rem;font-weight:900;color:var(--brass-light);letter-spacing:.04em}
+.logo span{font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--brass-dim);letter-spacing:.16em;text-transform:uppercase;display:block;margin-top:2px}
+.header-nav{display:flex;align-items:center;gap:20px}
+.header-nav a{font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--brass-dim);text-decoration:none}
+.header-nav a:hover{color:var(--brass)}
+.wrap{max-width:1100px;margin:0 auto;padding:32px 40px 60px}
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--brass);margin-bottom:32px}
+.tab{font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;padding:10px 24px;cursor:pointer;color:var(--cream-dim);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s}
+.tab.active{color:var(--brass-light);border-bottom-color:var(--brass-light)}
+.tab:hover:not(.active){color:var(--cream)}
+.panel{display:none}.panel.active{display:block}
+.section-title{font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--brass);border-bottom:1px solid var(--rule);padding-bottom:10px;margin-bottom:18px}
+/* user table */
+.user-table-wrap{overflow-x:auto;margin-bottom:32px}
+table{width:100%;border-collapse:collapse;min-width:700px}
+thead tr{border-bottom:2px solid var(--brass)}
+th{font-family:'IBM Plex Mono',monospace;font-size:.63rem;letter-spacing:.16em;text-transform:uppercase;color:var(--brass-dim);padding:10px 12px;text-align:left;white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--rule);transition:background .1s}
+tbody tr:hover{background:rgba(196,154,60,.04)}
+td{font-family:'IBM Plex Mono',monospace;font-size:.82rem;padding:11px 12px;color:var(--cream);vertical-align:middle}
+.initials-badge{background:rgba(196,154,60,.18);border:1px solid rgba(196,154,60,.35);color:var(--brass-light);padding:2px 8px;font-size:.72rem;font-weight:600;letter-spacing:.08em}
+.role-badge{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px}
+.role-badge.admin{background:rgba(196,154,60,.15);color:var(--brass);border:1px solid rgba(196,154,60,.3)}
+.role-badge.user{background:rgba(176,166,148,.08);color:var(--cream-dim);border:1px solid rgba(176,166,148,.2)}
+.mfa-badge{font-size:.62rem;letter-spacing:.08em;padding:2px 8px;border:1px solid}
+.mfa-badge.totp{color:#80d4aa;background:rgba(46,125,82,.15);border-color:rgba(46,125,82,.3)}
+.mfa-badge.email{color:#80b4e0;background:rgba(46,82,125,.15);border-color:rgba(46,82,125,.3)}
+.mfa-badge.none{color:var(--cream-dim);background:transparent;border-color:rgba(176,166,148,.2)}
+.action-cell{display:flex;gap:6px;flex-wrap:wrap}
+.btn-sm{font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border:none;cursor:pointer;transition:all .12s;white-space:nowrap}
+.btn-pw{background:rgba(196,154,60,.15);color:var(--brass);border:1px solid rgba(196,154,60,.3)}
+.btn-pw:hover{background:rgba(196,154,60,.28)}
+.btn-mfa{background:rgba(46,82,125,.2);color:#80b4e0;border:1px solid rgba(46,82,125,.3)}
+.btn-mfa:hover{background:rgba(46,82,125,.35)}
+.btn-role{background:rgba(176,166,148,.08);color:var(--cream-dim);border:1px solid rgba(176,166,148,.2)}
+.btn-role:hover{background:rgba(176,166,148,.15);color:var(--cream)}
+.btn-del{background:rgba(192,57,43,.12);color:#e08080;border:1px solid rgba(192,57,43,.25)}
+.btn-del:hover{background:rgba(192,57,43,.28)}
+/* forms */
+.form-card{background:var(--navy-mid);border:1px solid var(--rule);border-left:4px solid var(--brass);padding:24px 28px;margin-bottom:28px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+label{font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--brass-dim)}
+input,select{background:var(--navy-light);border:1px solid var(--rule);border-bottom:2px solid var(--brass-dim);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.88rem;padding:9px 11px;outline:none;transition:border-color .15s;width:100%}
+input::placeholder{color:rgba(176,166,148,.35)}
+input:focus,select:focus{border-bottom-color:var(--brass-light);background:rgba(26,48,80,.8)}
+select option{background:var(--navy-mid)}
+.btn{font-family:'IBM Plex Mono',monospace;font-size:.76rem;letter-spacing:.1em;text-transform:uppercase;padding:10px 20px;border:none;cursor:pointer;transition:all .15s}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--brass);color:var(--navy);font-weight:600}
+.btn-primary:hover:not(:disabled){background:var(--brass-light)}
+.btn-ghost{background:transparent;color:var(--cream-dim);border:1px solid var(--rule)}
+.btn-ghost:hover{border-color:var(--brass-dim);color:var(--cream)}
+.btn-danger{background:var(--red-dim);color:var(--cream)}
+.btn-danger:hover{background:var(--red)}
+.form-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* settings */
+.setting-row{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:var(--navy-mid);border:1px solid var(--rule);margin-bottom:10px}
+.setting-label{font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--cream);letter-spacing:.06em}
+.setting-sub{font-size:.68rem;color:var(--cream-dim);margin-top:3px}
+.toggle{position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;background:var(--navy-light);border:1px solid var(--rule);transition:background .2s}
+.toggle input:checked+.toggle-track{background:var(--brass-dim)}
+.toggle-thumb{position:absolute;width:18px;height:18px;background:var(--cream-dim);top:2px;left:2px;transition:transform .2s}
+.toggle input:checked~.toggle-thumb{transform:translateX(20px);background:var(--brass-light)}
+/* modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(8,15,26,.85);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--navy-mid);border:1px solid var(--brass-dim);border-top:3px solid var(--brass);padding:28px 32px;width:100%;max-width:440px;animation:slideUp .18s ease}
+@keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal h3{font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--brass-light);margin-bottom:20px}
+.modal .form-actions{margin-top:20px}
+/* toast */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--navy-light);border-left:3px solid var(--brass);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.76rem;padding:10px 16px;z-index:200;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{border-left-color:var(--red)}
+.toast.success{border-left-color:#3da66e}
+/* misc */
+.no-data{font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--cream-dim);padding:24px;text-align:center}
+.hint{font-size:.62rem;color:var(--cream-dim);margin-top:3px}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--navy)}
+::-webkit-scrollbar-thumb{background:var(--brass-dim)}
+</style></head><body>
+
+<header>
+  <div class="logo">⚓ Harborbucks <span>Admin Panel</span></div>
+  <div class="header-nav">
+    <a href="/">← Back to Ledger</a>
+    <a href="/auth/logout">Sign Out</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('users')">Users</div>
+    <div class="tab" onclick="switchTab('settings')">Settings</div>
+  </div>
+
+  <!-- USERS PANEL -->
+  <div class="panel active" id="panel-users">
+    <div class="section-title">All Users</div>
+    <div class="user-table-wrap">
+      <table>
+        <thead><tr><th>Initials</th><th>Username</th><th>Email</th><th>Role</th><th>MFA</th><th>Actions</th></tr></thead>
+        <tbody id="user-tbody"><tr><td colspan="6" class="no-data">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="section-title">Create User</div>
+    <div class="form-card">
+      <div class="form-grid">
+        <div class="field"><label>Username</label><input id="nu-username" type="text" placeholder="username" autocomplete="off"></div>
+        <div class="field"><label>Initials <span style="font-size:.55rem">(2–4 chars)</span></label><input id="nu-initials" type="text" maxlength="4" placeholder="e.g. JW" style="text-transform:uppercase"></div>
+        <div class="field"><label>Email</label><input id="nu-email" type="email" placeholder="optional" autocomplete="off"></div>
+        <div class="field"><label>Password</label><input id="nu-password" type="password" placeholder="min 8 chars" autocomplete="off"></div>
+        <div class="field"><label>Role</label>
+          <select id="nu-role"><option value="user">User</option><option value="admin">Admin</option></select>
+        </div>
+        <div class="field"><label>MFA</label>
+          <select id="nu-mfa">
+            <option value="none">None</option>
+            <option value="totp">Authenticator (TOTP)</option>
+            <option value="email" id="nu-email-opt" style="display:none">Email Code</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="createUser()">Create User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS PANEL -->
+  <div class="panel" id="panel-settings">
+
+    <div class="section-title">General</div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Allow New Account Registration</div>
+        <div class="setting-sub">When disabled, only admins can create accounts via the admin panel.</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-reg" onchange="saveRegistration()">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+
+    <div class="section-title" style="margin-top:28px">SMTP Configuration</div>
+    <div class="form-card">
+      <div class="form-grid">
+        <div class="field"><label>SMTP Host</label><input id="smtp-host" type="text" placeholder="smtp.example.com" autocomplete="off"></div>
+        <div class="field"><label>Port</label><input id="smtp-port" type="number" placeholder="587" min="1" max="65535"></div>
+        <div class="field"><label>Username</label><input id="smtp-user" type="text" placeholder="user@example.com" autocomplete="off"></div>
+        <div class="field"><label>Password <span class="hint" style="display:inline">leave blank to keep existing</span></label><input id="smtp-pass" type="password" placeholder="••••••••" autocomplete="off"></div>
+        <div class="field"><label>From Address</label><input id="smtp-from" type="email" placeholder="noreply@example.com" autocomplete="off"></div>
+        <div class="field" style="justify-content:flex-end;padding-bottom:4px">
+          <label style="margin-bottom:auto"> </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.72rem;color:var(--cream-dim);text-transform:none;letter-spacing:0">
+            <input type="checkbox" id="smtp-secure" style="width:14px;height:14px;padding:0;accent-color:var(--brass)"> Use TLS/SSL
+          </label>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveSMTP()">Save SMTP</button>
+        <button class="btn btn-ghost" onclick="testSMTP()">Send Test Email</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD MODAL -->
+<div class="modal-overlay" id="modal-pw">
+  <div class="modal">
+    <h3>Reset Password</h3>
+    <div class="field" style="margin-bottom:14px"><label>New Password</label><input id="mpw-password" type="password" placeholder="min 8 characters"></div>
+    <div class="field" style="margin-bottom:0"><label>Confirm Password</label><input id="mpw-confirm" type="password" placeholder="confirm"></div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="confirmResetPw()">Reset Password</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-pw')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let users=[], myId=null, smtpConfigured=false;
+let resetPwUserId=null;
+
+// ── INIT ──────────────────────────────────────
+async function init(){
+  const [usersData, meData, cfgData, settingsData] = await Promise.all([
+    fetch('/api/admin/users').then(r=>r.json()),
+    fetch('/api/me').then(r=>r.json()),
+    fetch('/api/public-config').then(r=>r.json()),
+    fetch('/api/admin/settings').then(r=>r.json()),
+  ]);
+  users=usersData; myId=meData.id;
+  smtpConfigured=cfgData.smtpConfigured;
+  if(smtpConfigured) document.getElementById('nu-email-opt').style.display='';
+  renderUsers();
+  loadSettings(settingsData);
+}
+
+// ── TABS ──────────────────────────────────────
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach((el,i)=>{ el.classList.toggle('active',['users','settings'][i]===t); });
+  document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
+  document.getElementById(`panel-${t}`).classList.add('active');
+}
+
+// ── USERS ─────────────────────────────────────
+function renderUsers(){
+  const tbody=document.getElementById('user-tbody');
+  if(!users.length){ tbody.innerHTML='<tr><td colspan="6" class="no-data">No users yet.</td></tr>'; return; }
+  tbody.innerHTML=users.map(u=>`
+    <tr>
+      <td><span class="initials-badge">${esc(u.initials)}</span></td>
+      <td>${esc(u.username)}</td>
+      <td style="color:var(--cream-dim)">${u.email?esc(u.email):'—'}</td>
+      <td><span class="role-badge ${u.role}">${u.role}</span></td>
+      <td><span class="mfa-badge ${u.mfa_type}">${u.mfa_type}</span></td>
+      <td><div class="action-cell">
+        <button class="btn-sm btn-pw" onclick="openResetPw(${u.id})">Reset PW</button>
+        <button class="btn-sm btn-mfa" onclick="resetMFA(${u.id},'${esc(u.username)}')">Reset MFA</button>
+        <button class="btn-sm btn-role" onclick="toggleRole(${u.id},'${u.role}','${esc(u.username)}')">${u.role==='admin'?'Make User':'Make Admin'}</button>
+        ${u.id!==myId?`<button class="btn-sm btn-del" onclick="deleteUser(${u.id},'${esc(u.username)}')">Delete</button>`:''}
+      </div></td>
+    </tr>`).join('');
+}
+
+async function createUser(){
+  const username=document.getElementById('nu-username').value.trim();
+  const initials=document.getElementById('nu-initials').value.trim();
+  const email=document.getElementById('nu-email').value.trim();
+  const password=document.getElementById('nu-password').value;
+  const role=document.getElementById('nu-role').value;
+  const mfaType=document.getElementById('nu-mfa').value;
+  if(!username||!initials||!password) return toast('Username, initials, and password required.','error');
+  if(!/^[A-Za-z0-9]{2,4}$/.test(initials)) return toast('Initials must be 2–4 alphanumeric characters.','error');
+  try{
+    const res=await fetch('/api/admin/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,email,password,initials,role,mfaType})});
+    const d=await res.json();
+    if(!res.ok) return toast(d.error||'Failed.','error');
+    users.push(d); renderUsers();
+    ['nu-username','nu-initials','nu-email','nu-password'].forEach(id=>document.getElementById(id).value='');
+    toast('User created.','success');
+  }catch(e){ toast('Network error.','error'); }
+}
+
+function openResetPw(id){ resetPwUserId=id; document.getElementById('mpw-password').value=''; document.getElementById('mpw-confirm').value=''; document.getElementById('modal-pw').classList.add('open'); setTimeout(()=>document.getElementById('mpw-password').focus(),50); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.getElementById('modal-pw').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal('modal-pw'); });
+
+async function confirmResetPw(){
+  const password=document.getElementById('mpw-password').value;
+  const confirm=document.getElementById('mpw-confirm').value;
+  if(password!==confirm) return toast('Passwords do not match.','error');
+  if(password.length<8) return toast('Password must be at least 8 characters.','error');
+  try{
+    const res=await fetch(`/api/admin/users/${resetPwUserId}/reset-password`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});
+    const d=await res.json();
+    if(!res.ok) return toast(d.error||'Failed.','error');
+    closeModal('modal-pw'); toast('Password reset.','success');
+  }catch(e){ toast('Network error.','error'); }
+}
+
+async function resetMFA(id,username){
+  if(!confirm(`Reset MFA for ${username}? They will log in with password only until they re-enable MFA.`)) return;
+  try{
+    const res=await fetch(`/api/admin/users/${id}/reset-mfa`,{method:'PATCH'});
+    const d=await res.json();
+    if(!res.ok) return toast(d.error||'Failed.','error');
+    const u=users.find(x=>x.id===id); if(u){ u.mfa_type='none'; } renderUsers();
+    toast('MFA reset.','success');
+  }catch(e){ toast('Network error.','error'); }
+}
+
+async function toggleRole(id,currentRole,username){
+  const newRole=currentRole==='admin'?'user':'admin';
+  if(!confirm(`Change ${username} to ${newRole}?`)) return;
+  try{
+    const res=await fetch(`/api/admin/users/${id}/role`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:newRole})});
+    const d=await res.json();
+    if(!res.ok) return toast(d.error||'Failed.','error');
+    const u=users.find(x=>x.id===id); if(u){ u.role=newRole; } renderUsers();
+    toast(`Role updated to ${newRole}.`,'success');
+  }catch(e){ toast('Network error.','error'); }
+}
+
+async function deleteUser(id,username){
+  if(!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+  try{
+    const res=await fetch(`/api/admin/users/${id}`,{method:'DELETE'});
+    const d=await res.json();
+    if(!res.ok) return toast(d.error||'Failed.','error');
+    users=users.filter(u=>u.id!==id); renderUsers();
+    toast('User deleted.','success');
+  }catch(e){ toast('Network error.','error'); }
+}
+
+// ── SETTINGS ──────────────────────────────────
+function loadSettings(s){
+  document.getElementById('toggle-reg').checked=s.allowRegistration;
+  document.getElementById('smtp-host').value=s.smtp.host||'';
+  document.getElementById('smtp-port').value=s.smtp.port||587;
+  document.getElementById('smtp-user').value=s.smtp.user||'';
+  document.getElementById('smtp-from').value=s.smtp.from||'';
+  document.getElementById('smtp-secure').checked=s.smtp.secure||false;
+  if(s.smtp.hasPassword) document.getElementById('smtp-pass').placeholder='••••••••  (saved)';
+}
+
+async function saveRegistration(){
+  const v=document.getElementById('toggle-reg').checked;
+  try{
+    const res=await fetch('/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({allowRegistration:v})});
+    if(!res.ok) return toast('Failed to save.','error');
+    toast(`Registration ${v?'enabled':'disabled'}.`,'success');
+  }catch(e){ toast('Network error.','error'); }
+}
+
+async function saveSMTP(){
+  const smtp={
+    host:document.getElementById('smtp-host').value.trim(),
+    port:parseInt(document.getElementById('smtp-port').value)||587,
+    user:document.getElementById('smtp-user').value.trim(),
+    pass:document.getElementById('smtp-pass').value||undefined,
+    from:document.getElementById('smtp-from').value.trim(),
+    secure:document.getElementById('smtp-secure').checked,
+  };
+  try{
+    const res=await fetch('/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({smtp})});
+    if(!res.ok) return toast('Failed to save SMTP.','error');
+    document.getElementById('smtp-pass').value='';
+    document.getElementById('smtp-pass').placeholder='••••••••  (saved)';
+    toast('SMTP settings saved.','success');
+    // update email MFA option availability
+    if(smtp.host){ document.getElementById('nu-email-opt').style.display=''; }
+  }catch(e){ toast('Network error.','error'); }
+}
+
+async function testSMTP(){
+  try{
+    const res=await fetch('/api/admin/settings/test-smtp',{method:'POST'});
+    const d=await res.json();
+    if(!res.ok) return toast('SMTP test failed: '+d.error,'error');
+    toast('Test email sent to your address.','success');
+  }catch(e){ toast('Network error.','error'); }
+}
+
+// ── HELPERS ───────────────────────────────────
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+let toastTimer;
+function toast(msg,type=''){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className=`toast show ${type}`;
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+init();
+</script></body></html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Harborbucks — New Password</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0c1a2e;--navy-mid:#132238;--navy-light:#1a3050;--brass:#c49a3c;--brass-light:#e0b84a;--brass-dim:#8a6a20;--cream:#f0e8d8;--cream-dim:#b8ad99;--red:#c0392b;--rule:rgba(196,154,60,0.25)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--navy);background-image:repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(196,154,60,.06) 39px,rgba(196,154,60,.06) 40px);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;padding:24px}
+.brand{text-align:center;margin-bottom:36px}
+.brand h1{font-family:'Playfair Display',serif;font-size:2.6rem;font-weight:900;color:var(--brass-light);letter-spacing:.04em;line-height:1}
+.brand p{font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--brass-dim);margin-top:6px}
+.card{background:var(--navy-mid);border:1px solid var(--rule);border-top:3px solid var(--brass);padding:36px 40px;width:100%;max-width:380px}
+.card-title{font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;color:var(--brass);border-bottom:1px solid var(--rule);padding-bottom:12px;margin-bottom:24px}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+label{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--brass-dim)}
+input{background:var(--navy-light);border:1px solid var(--rule);border-bottom:2px solid var(--brass-dim);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.92rem;padding:10px 12px;outline:none;transition:border-color .15s;width:100%}
+input::placeholder{color:rgba(176,166,148,.35)}
+input:focus{border-bottom-color:var(--brass-light);background:rgba(26,48,80,.8)}
+.btn{width:100%;margin-top:8px;background:var(--brass);color:var(--navy);border:none;font-family:'IBM Plex Mono',monospace;font-size:.8rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:13px;cursor:pointer;transition:background .15s}
+.btn:hover:not(:disabled){background:var(--brass-light)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.msg{font-size:.78rem;padding:12px 14px;margin-bottom:16px;border-left:3px solid;display:none}
+.msg.show{display:block}
+.msg.success{color:var(--brass-light);background:rgba(196,154,60,.08);border-color:var(--brass)}
+.msg.error{color:#e08080;background:rgba(192,57,43,.12);border-color:var(--red)}
+.strength{height:3px;background:var(--navy-light);margin-top:4px}
+.strength-bar{height:100%;width:0;transition:width .2s,background .2s}
+.hint{font-size:.6rem;color:var(--cream-dim);margin-top:3px}
+</style></head><body>
+<div class="brand"><h1>⚓ Harborbucks</h1><p>Voucher Ledger — Internal Use Only</p></div>
+<div class="card">
+  <div class="card-title">Set New Password</div>
+  <div class="msg" id="msg"></div>
+  <div id="form-area">
+    <div class="field"><label>New Password</label><input id="password" type="password" autocomplete="new-password" autofocus oninput="checkStrength()"><div class="strength"><div class="strength-bar" id="sbar"></div></div><div class="hint" id="slabel"></div></div>
+    <div class="field"><label>Confirm Password</label><input id="confirm" type="password" autocomplete="new-password"></div>
+    <button class="btn" id="btn" onclick="submit()">Set Password & Sign In</button>
+  </div>
+</div>
+<script>
+const token=new URLSearchParams(window.location.search).get('token');
+if(!token){ document.getElementById('msg').className='msg show error'; document.getElementById('msg').textContent='Invalid reset link.'; document.getElementById('form-area').remove(); }
+function checkStrength(){
+  const pw=document.getElementById('password').value;
+  let s=0;
+  if(pw.length>=8)s++;if(pw.length>=12)s++;if(/[A-Z]/.test(pw))s++;if(/[0-9]/.test(pw))s++;if(/[^A-Za-z0-9]/.test(pw))s++;
+  const cols=['','#c0392b','#e67e22','#c49a3c','#2e7d52','#3da66e'];
+  const labs=['','Weak','Fair','Good','Strong','Very strong'];
+  document.getElementById('sbar').style.cssText=`width:${s/5*100}%;background:${cols[s]||'transparent'}`;
+  document.getElementById('slabel').textContent=s>0?labs[s]:'';
+}
+async function submit(){
+  const password=document.getElementById('password').value;
+  const confirmPassword=document.getElementById('confirm').value;
+  const btn=document.getElementById('btn');
+  if(password!==confirmPassword) return showMsg('Passwords do not match.','error');
+  if(password.length<8) return showMsg('Password must be at least 8 characters.','error');
+  btn.disabled=true; btn.textContent='Saving…';
+  try{
+    const res=await fetch('/auth/reset-confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,password,confirmPassword})});
+    const d=await res.json();
+    if(!res.ok) return showMsg(d.error||'Reset failed.','error');
+    document.getElementById('form-area').innerHTML='';
+    showMsg('Password updated. Redirecting to login…','success');
+    setTimeout(()=>window.location.href='/login',2000);
+  }catch(e){ showMsg('Network error.','error'); }
+  finally{ btn.disabled=false; btn.textContent='Set Password & Sign In'; }
+}
+function showMsg(m,t){const e=document.getElementById('msg');e.textContent=m;e.className=`msg show ${t}`}
+</script></body></html>
