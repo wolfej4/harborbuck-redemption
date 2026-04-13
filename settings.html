@@ -41,8 +41,7 @@ header {
 
 /* ── LAYOUT ── */
 .wrap { max-width: 680px; margin: 0 auto; padding: 36px 40px 60px; }
-.page-title { font-family: 'Playfair Display', serif; font-size: 1.9rem; font-weight: 700; color: var(--brass-light); margin-bottom: 8px; }
-.page-sub { font-family: 'IBM Plex Mono', monospace; font-size: .72rem; color: var(--cream-dim); letter-spacing: .06em; margin-bottom: 36px; }
+.page-title { font-family: 'Playfair Display', serif; font-size: 1.9rem; font-weight: 700; color: var(--brass-light); margin-bottom: 24px; }
 
 /* ── PROFILE CARD ── */
 .profile-card {
@@ -159,11 +158,10 @@ input[readonly] { opacity: .55; cursor: not-allowed; border-bottom-style: dashed
 
 <div class="wrap">
   <div class="page-title">Account Settings</div>
-  <div class="page-sub" id="page-sub">Loading…</div>
 
   <!-- PROFILE CARD -->
   <div class="profile-card">
-    <div class="avatar" id="avatar">?</div>
+    <div class="avatar" id="avatar">⚓</div>
     <div class="profile-info">
       <div class="name" id="profile-name">—</div>
       <div class="meta">
@@ -266,14 +264,19 @@ async function init() {
     currentUser    = me;
     smtpConfigured = cfg.smtpConfigured;
 
-    const initials = me.initials || me.username?.slice(0,2).toUpperCase() || '?';
+    // Derive best available display for initials
+    const initials = (me.initials && me.initials.trim())
+      ? me.initials.trim().toUpperCase()
+      : (me.username ? me.username.slice(0, 2).toUpperCase() : null);
 
-    // Profile card
-    document.getElementById('avatar').textContent          = initials;
-    document.getElementById('profile-name').textContent    = me.username || '—';
-    document.getElementById('page-sub').textContent        = `Signed in as ${me.username} (${initials})`;
-    document.getElementById('profile-initials-badge').innerHTML =
-      `<span class="badge" style="color:var(--brass-light);background:rgba(196,154,60,.12);border-color:rgba(196,154,60,.3)">${initials}</span>`;
+    // Profile card — avatar shows initials if available, anchor if not
+    document.getElementById('avatar').textContent       = initials || '⚓';
+    document.getElementById('avatar').style.fontSize   = initials ? '1.3rem' : '1.8rem';
+    document.getElementById('profile-name').textContent = me.username || '—';
+
+    document.getElementById('profile-initials-badge').innerHTML = initials
+      ? `<span class="badge" style="color:var(--brass-light);background:rgba(196,154,60,.12);border-color:rgba(196,154,60,.3)">${initials}</span>`
+      : `<span class="badge" style="color:var(--cream-dim);border-color:rgba(176,166,148,.2)">No initials set</span>`;
     document.getElementById('profile-role-badge').innerHTML =
       `<span class="badge badge-${me.role}">${me.role}</span>`;
     document.getElementById('profile-mfa-badge').innerHTML =
@@ -295,9 +298,10 @@ async function init() {
     updateMfaNote();
 
   } catch(e) {
-    document.getElementById('page-sub').textContent = 'Failed to load account info.';
-    document.getElementById('avatar').textContent   = '!';
-    document.getElementById('avatar').style.background = 'var(--red-dim)';
+    document.getElementById('avatar').textContent        = '!';
+    document.getElementById('avatar').style.background  = 'var(--red-dim)';
+    document.getElementById('avatar').style.fontSize    = '1.4rem';
+    document.getElementById('profile-name').textContent = 'Error loading profile';
     console.error('Settings init error:', e);
   }
 }
