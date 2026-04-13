@@ -5,6 +5,7 @@ const { authenticator } = require('otplib');
 const QRCode         = require('qrcode');
 const Database       = require('better-sqlite3');
 const nodemailer     = require('nodemailer');
+const morgan         = require('morgan');
 const path           = require('path');
 const fs             = require('fs');
 const crypto         = require('crypto');
@@ -12,6 +13,35 @@ const crypto         = require('crypto');
 const app     = express();
 const PORT    = process.env.PORT    || 3000;
 const DB_PATH = process.env.DB_PATH || '/data/harborbucks.db';
+
+// ── LOGGER ─────────────────────────────────────
+const LOG_PATH = process.env.LOG_PATH || path.join(path.dirname(DB_PATH), 'harborbucks.log');
+const MAX_LOG_BYTES = 10 * 1024 * 1024; // 10 MB before rotation
+
+function log(level, event, details = {}) {
+  const entry = { ts: Date.now(), level, event, ...details };
+  const line  = JSON.stringify(entry);
+  // Coloured stdout for docker logs
+  const colour = { info: '\x1b[36m', warn: '\x1b[33m', error: '\x1b[31m' }[level] || '';
+  process.stdout.write(`${colour}[${level.toUpperCase()}]\x1b[0m ${new Date(entry.ts).toISOString()} ${event}${details.user ? ' user='+details.user : ''}${details.ip ? ' ip='+details.ip : ''}${details.msg ? ' — '+details.msg : ''}\n`);
+  try {
+    // Rotate if over limit
+    try {
+      const stat = fs.statSync(LOG_PATH);
+      if (stat.size > MAX_LOG_BYTES) {
+        fs.renameSync(LOG_PATH, LOG_PATH + '.1');
+      }
+    } catch {}
+    fs.appendFileSync(LOG_PATH, line + '\n');
+  } catch (e) {
+    process.stderr.write('Logger write error: ' + e.message + '\n');
+  }
+}
+
+// Helper to extract IP from request (handles reverse proxy)
+function ip(req) {
+  return req.ip || req.connection?.remoteAddress || 'unknown';
+}
 
 // ── DATABASE ───────────────────────────────────
 const dbDir = path.dirname(DB_PATH);
@@ -26,7 +56,6 @@ db.exec(`
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
-
   CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     username      TEXT UNIQUE NOT NULL,
@@ -38,7 +67,6 @@ db.exec(`
     totp_secret   TEXT,
     created_at    INTEGER NOT NULL
   );
-
   CREATE TABLE IF NOT EXISTS entries (
     id            TEXT PRIMARY KEY,
     serials       TEXT NOT NULL DEFAULT '[]',
@@ -49,7 +77,6 @@ db.exec(`
     voided        INTEGER NOT NULL DEFAULT 0,
     created_at    INTEGER NOT NULL
   );
-
   CREATE TABLE IF NOT EXISTS auth_tokens (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL,
@@ -60,6 +87,40 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `);
+
+// ── MIGRATIONS ─────────────────────────────────
+// Safely add columns that may not exist in databases created by older versions
+(function runMigrations() {
+  const existingCols = db.prepare('PRAGMA table_info(users)').all().map(r => r.name);
+  const migrations = [
+    { col: 'email',       sql: 'ALTER TABLE users ADD COLUMN email TEXT' },
+    { col: 'initials',    sql: "ALTER TABLE users ADD COLUMN initials TEXT NOT NULL DEFAULT ''" },
+    { col: 'role',        sql: "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'" },
+    { col: 'mfa_type',    sql: "ALTER TABLE users ADD COLUMN mfa_type TEXT NOT NULL DEFAULT 'none'" },
+    { col: 'totp_secret', sql: 'ALTER TABLE users ADD COLUMN totp_secret TEXT' },
+  ];
+  for (const m of migrations) {
+    if (!existingCols.includes(m.col)) {
+      db.prepare(m.sql).run();
+      log('info', 'db.migration', { msg: `Added column users.${m.col}` });
+    }
+  }
+
+  // Backfill initials for any users that have an empty string (from the migration default)
+  // Use username as a fallback so the UNIQUE constraint doesn't block login
+  const blankInitials = db.prepare("SELECT id, username FROM users WHERE initials = ''").all();
+  for (const u of blankInitials) {
+    const candidate = u.username.slice(0, 4).toUpperCase();
+    // Make it unique by appending a digit if needed
+    let initials = candidate;
+    let suffix = 1;
+    while (db.prepare('SELECT id FROM users WHERE initials = ? AND id != ?').get(initials, u.id)) {
+      initials = candidate.slice(0, 3) + suffix++;
+    }
+    db.prepare('UPDATE users SET initials = ? WHERE id = ?').run(initials, u.id);
+    log('warn', 'db.migration.backfill', { msg: `Set initials for user "${u.username}" → "${initials}". Update in Admin → Users.` });
+  }
+})();
 
 // ── CONFIG HELPERS ─────────────────────────────
 function getConfig(key, def = null) {
@@ -87,10 +148,8 @@ async function getTransporter() {
   const cfg = getSmtpConfig();
   if (!cfg?.host) return null;
   return nodemailer.createTransport({
-    host:   cfg.host,
-    port:   cfg.port || 587,
-    secure: cfg.secure || false,
-    auth:   cfg.user ? { user: cfg.user, pass: cfg.pass } : undefined,
+    host: cfg.host, port: cfg.port || 587, secure: cfg.secure || false,
+    auth: cfg.user ? { user: cfg.user, pass: cfg.pass } : undefined,
   });
 }
 async function sendEmail({ to, subject, text, html }) {
@@ -104,13 +163,33 @@ async function sendEmail({ to, subject, text, html }) {
 app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// HTTP request logging (only non-static, non-noisy routes)
+app.use(morgan((tokens, req, res) => {
+  const status = tokens.status(req, res);
+  const url    = tokens.url(req, res);
+  // Skip favicon and static-ish GETs that aren't interesting
+  if (url === '/favicon.svg') return null;
+  const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info';
+  log(level, 'http', {
+    method: tokens.method(req, res),
+    url,
+    status: parseInt(status),
+    ms: Math.round(parseFloat(tokens['response-time'](req, res))),
+    ip: ip(req),
+    user: req.session?.userId
+      ? db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username
+      : undefined,
+  });
+  return null; // morgan won't write its own line; we did it above
+}));
+
 app.use(session({
   secret:            getOrCreateSecret(),
   resave:            false,
   saveUninitialized: false,
   cookie: {
-    httpOnly: true,
-    sameSite: 'lax',
+    httpOnly: true, sameSite: 'lax',
     secure:   process.env.SECURE_COOKIES === 'true',
     maxAge:   8 * 60 * 60 * 1000,
   },
@@ -132,24 +211,27 @@ function page(res, f) { res.sendFile(path.join(__dirname, 'public', f)); }
 // ── FAVICON ────────────────────────────────────
 app.get('/favicon.svg', (_req, res) => {
   res.setHeader('Content-Type', 'image/svg+xml');
-  res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-    <rect width="32" height="32" rx="6" fill="#0c1a2e"/>
-    <text x="16" y="23" text-anchor="middle" font-size="20" fill="#c49a3c">⚓</text>
-  </svg>`);
+  res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#0c1a2e"/><text x="16" y="23" text-anchor="middle" font-size="20" fill="#c49a3c">⚓</text></svg>`);
 });
 
 // ── HTML ROUTES ────────────────────────────────
-app.get('/',              requireAuth,  (_req, res) => page(res, 'index.html'));
-app.get('/admin',         requireAdmin, (_req, res) => page(res, 'admin.html'));
-app.get('/settings',      requireAuth,  (_req, res) => page(res, 'settings.html'));
-app.get('/login',     (req, res) => { if (req.session?.authenticated) return res.redirect('/'); if (!hasUsers()) return res.redirect('/setup'); page(res, 'login.html'); });
-app.get('/setup',     (req, res) => { if (hasUsers()) return res.redirect('/login'); page(res, 'setup.html'); });
-app.get('/register',  (req, res) => { if (!hasUsers()) return res.redirect('/setup'); if (getConfig('allow_registration','1') !== '1') return res.redirect('/login'); page(res, 'register.html'); });
-app.get('/mfa',       (req, res) => { if (!req.session?.mfaPending) return res.redirect('/login'); page(res, 'mfa.html'); });
-app.get('/setup-mfa', (req, res) => { if (!req.session?.setupMfa)   return res.redirect('/login'); page(res, 'mfa-setup.html'); });
+app.get('/',             requireAuth,  (_req, res) => page(res, 'index.html'));
+app.get('/admin',        requireAdmin, (_req, res) => page(res, 'admin.html'));
+app.get('/settings',     requireAuth,  (_req, res) => page(res, 'settings.html'));
+app.get('/login',        (req, res) => { if (req.session?.authenticated) return res.redirect('/'); if (!hasUsers()) return res.redirect('/setup'); page(res, 'login.html'); });
+app.get('/setup',        (req, res) => { if (hasUsers()) return res.redirect('/login'); page(res, 'setup.html'); });
+app.get('/register',     (req, res) => { if (!hasUsers()) return res.redirect('/setup'); if (getConfig('allow_registration','1') !== '1') return res.redirect('/login'); page(res, 'register.html'); });
+app.get('/mfa',          (req, res) => { if (!req.session?.mfaPending) return res.redirect('/login'); page(res, 'mfa.html'); });
+app.get('/setup-mfa',    (req, res) => { if (!req.session?.setupMfa) return res.redirect('/login'); page(res, 'mfa-setup.html'); });
 app.get('/reset-request',  (_req, res) => page(res, 'reset-request.html'));
 app.get('/reset-confirm',  (_req, res) => page(res, 'reset-confirm.html'));
-app.get('/auth/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
+app.get('/auth/logout', (req, res) => {
+  const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session?.userId)?.username;
+  req.session.destroy(() => {
+    if (username) log('info', 'auth.logout', { user: username, ip: ip(req) });
+    res.redirect('/login');
+  });
+});
 
 // ── PUBLIC CONFIG ──────────────────────────────
 app.get('/api/public-config', (_req, res) => {
@@ -173,21 +255,22 @@ app.post('/auth/setup', async (req, res) => {
     db.prepare('INSERT INTO users (username,email,password_hash,initials,role,mfa_type,created_at) VALUES (?,?,?,?,?,?,?)')
       .run(username.trim().toLowerCase(), email?.trim()||null, hash, initials.toUpperCase(), 'admin', chosenMfa, Date.now());
     const user = db.prepare('SELECT * FROM users WHERE username=?').get(username.trim().toLowerCase());
+    log('info', 'auth.setup', { user: user.username, initials: user.initials, ip: ip(req) });
     req.session.regenerate(err => {
       if (err) return res.status(500).json({ error: 'Session error.' });
-      req.session.userId   = user.id;
-      req.session.userRole = 'admin';
+      req.session.userId = user.id; req.session.userRole = 'admin';
       if (chosenMfa === 'totp') { req.session.setupMfa = true; return res.json({ redirect: '/setup-mfa' }); }
       req.session.authenticated = true;
       res.json({ redirect: '/' });
     });
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return res.status(400).json({ error: 'Username or initials already taken.' });
-    console.error(e); res.status(500).json({ error: 'Failed to create account.' });
+    log('error', 'auth.setup.error', { msg: e.message });
+    res.status(500).json({ error: 'Failed to create account.' });
   }
 });
 
-// ── AUTH: REGISTER (open) ──────────────────────
+// ── AUTH: REGISTER ─────────────────────────────
 app.post('/auth/register', async (req, res) => {
   if (getConfig('allow_registration','1') !== '1') return res.status(403).json({ error: 'Registration is disabled.' });
   const { username, email, password, confirmPassword, initials, mfaType } = req.body;
@@ -204,17 +287,18 @@ app.post('/auth/register', async (req, res) => {
     db.prepare('INSERT INTO users (username,email,password_hash,initials,role,mfa_type,created_at) VALUES (?,?,?,?,?,?,?)')
       .run(username.trim().toLowerCase(), email?.trim()||null, hash, initials.toUpperCase(), 'user', chosenMfa, Date.now());
     const user = db.prepare('SELECT * FROM users WHERE username=?').get(username.trim().toLowerCase());
+    log('info', 'auth.register', { user: user.username, initials: user.initials, ip: ip(req) });
     req.session.regenerate(err => {
       if (err) return res.status(500).json({ error: 'Session error.' });
-      req.session.userId   = user.id;
-      req.session.userRole = 'user';
+      req.session.userId = user.id; req.session.userRole = 'user';
       if (chosenMfa === 'totp') { req.session.setupMfa = true; return res.json({ redirect: '/setup-mfa' }); }
       req.session.authenticated = true;
       res.json({ redirect: '/' });
     });
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return res.status(400).json({ error: 'Username, email, or initials already taken.' });
-    console.error(e); res.status(500).json({ error: 'Failed to create account.' });
+    log('error', 'auth.register.error', { msg: e.message, ip: ip(req) });
+    res.status(500).json({ error: 'Failed to create account.' });
   }
 });
 
@@ -223,9 +307,15 @@ app.post('/auth/login', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required.' });
   const user = db.prepare('SELECT * FROM users WHERE username=?').get(username.trim().toLowerCase());
-  if (!user) return res.status(401).json({ error: 'Invalid username or password.' });
+  if (!user) {
+    log('warn', 'auth.login.fail', { user: username.trim(), reason: 'user_not_found', ip: ip(req) });
+    return res.status(401).json({ error: 'Invalid username or password.' });
+  }
   const match = await bcrypt.compare(password, user.password_hash);
-  if (!match) return res.status(401).json({ error: 'Invalid username or password.' });
+  if (!match) {
+    log('warn', 'auth.login.fail', { user: user.username, reason: 'bad_password', ip: ip(req) });
+    return res.status(401).json({ error: 'Invalid username or password.' });
+  }
 
   req.session.regenerate(async err => {
     if (err) return res.status(500).json({ error: 'Session error.' });
@@ -234,28 +324,29 @@ app.post('/auth/login', async (req, res) => {
 
     if (user.mfa_type === 'none') {
       req.session.authenticated = true;
+      log('info', 'auth.login.success', { user: user.username, mfa: 'none', ip: ip(req) });
       return res.json({ redirect: '/' });
     }
     if (user.mfa_type === 'totp') {
       if (!user.totp_secret) { req.session.setupMfa = true; return res.json({ redirect: '/setup-mfa' }); }
-      req.session.mfaPending = true;
-      req.session.mfaType    = 'totp';
+      req.session.mfaPending = true; req.session.mfaType = 'totp';
+      log('info', 'auth.login.mfa_pending', { user: user.username, mfa: 'totp', ip: ip(req) });
       return res.json({ redirect: '/mfa' });
     }
     if (user.mfa_type === 'email') {
       if (!user.email) { req.session.authenticated = true; return res.json({ redirect: '/' }); }
       const code     = String(Math.floor(100000 + Math.random() * 900000));
       const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-      req.session.mfaPending  = true;
-      req.session.mfaType     = 'email';
-      req.session.emailCode   = { hash: codeHash, expiresAt: Date.now() + 10*60*1000 };
+      req.session.mfaPending = true; req.session.mfaType = 'email';
+      req.session.emailCode  = { hash: codeHash, expiresAt: Date.now() + 10*60*1000 };
       try {
         await sendEmail({ to: user.email, subject: 'Harborbucks — Login Code',
           text:  `Your Harborbucks login code is: ${code}\n\nExpires in 10 minutes.`,
-          html:  `<p>Your Harborbucks login code is: <strong style="font-size:1.4em">${code}</strong></p><p>Expires in 10 minutes.</p>` });
+          html:  `<p>Your login code is: <strong style="font-size:1.4em">${code}</strong></p><p>Expires in 10 minutes.</p>` });
+        log('info', 'auth.login.mfa_pending', { user: user.username, mfa: 'email', ip: ip(req) });
         return res.json({ redirect: '/mfa' });
       } catch(e) {
-        console.error('Email MFA failed:', e);
+        log('error', 'auth.mfa.email_send_fail', { user: user.username, msg: e.message });
         return res.status(500).json({ error: 'Failed to send MFA email. Contact your administrator.' });
       }
     }
@@ -270,30 +361,42 @@ app.get('/auth/mfa-info', (req, res) => {
   res.json({ type: req.session.mfaType || 'totp' });
 });
 
-// ── MFA: VERIFY (login step 2) ─────────────────
+// ── MFA: VERIFY ────────────────────────────────
 app.post('/auth/mfa', (req, res) => {
   if (!req.session?.mfaPending) return res.status(403).json({ error: 'Unauthorized.' });
   const { token } = req.body;
   const type = req.session.mfaType || 'totp';
+  const user = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId);
+
   if (type === 'totp') {
-    const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
-    if (!user?.totp_secret) return res.status(500).json({ error: 'MFA not configured.' });
-    if (!authenticator.verify({ token: String(token).trim(), secret: user.totp_secret }))
+    const u = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
+    if (!u?.totp_secret) return res.status(500).json({ error: 'MFA not configured.' });
+    if (!authenticator.verify({ token: String(token).trim(), secret: u.totp_secret })) {
+      log('warn', 'auth.mfa.fail', { user: user?.username, type, ip: ip(req) });
       return res.status(401).json({ error: 'Invalid code. Try again.' });
+    }
   } else if (type === 'email') {
     const ec = req.session.emailCode;
     if (!ec) return res.status(400).json({ error: 'No code pending.' });
-    if (Date.now() > ec.expiresAt) { delete req.session.emailCode; return res.status(401).json({ error: 'Code expired. Please log in again.' }); }
-    if (crypto.createHash('sha256').update(String(token).trim()).digest('hex') !== ec.hash)
+    if (Date.now() > ec.expiresAt) {
+      delete req.session.emailCode;
+      log('warn', 'auth.mfa.expired', { user: user?.username, type, ip: ip(req) });
+      return res.status(401).json({ error: 'Code expired. Please log in again.' });
+    }
+    if (crypto.createHash('sha256').update(String(token).trim()).digest('hex') !== ec.hash) {
+      log('warn', 'auth.mfa.fail', { user: user?.username, type, ip: ip(req) });
       return res.status(401).json({ error: 'Invalid code. Try again.' });
+    }
     delete req.session.emailCode;
   }
+
   delete req.session.mfaPending; delete req.session.mfaType;
   req.session.authenticated = true;
+  log('info', 'auth.login.success', { user: user?.username, mfa: type, ip: ip(req) });
   res.json({ redirect: '/' });
 });
 
-// ── MFA: RESEND EMAIL CODE ─────────────────────
+// ── MFA: RESEND EMAIL ──────────────────────────
 app.post('/auth/mfa/resend', async (req, res) => {
   if (!req.session?.mfaPending || req.session.mfaType !== 'email') return res.status(403).json({ error: 'Unauthorized.' });
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
@@ -303,10 +406,14 @@ app.post('/auth/mfa/resend', async (req, res) => {
   req.session.emailCode = { hash: codeHash, expiresAt: Date.now() + 10*60*1000 };
   try {
     await sendEmail({ to: user.email, subject: 'Harborbucks — New Login Code',
-      text:  `Your new Harborbucks login code is: ${code}\n\nExpires in 10 minutes.`,
-      html:  `<p>Your new Harborbucks login code is: <strong style="font-size:1.4em">${code}</strong></p><p>Expires in 10 minutes.</p>` });
+      text:  `Your new code is: ${code}\n\nExpires in 10 minutes.`,
+      html:  `<p>Your new code is: <strong style="font-size:1.4em">${code}</strong></p><p>Expires in 10 minutes.</p>` });
+    log('info', 'auth.mfa.resend', { user: user.username, ip: ip(req) });
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: 'Failed to send email.' }); }
+  } catch(e) {
+    log('error', 'auth.mfa.resend_fail', { user: user.username, msg: e.message });
+    res.status(500).json({ error: 'Failed to send email.' });
+  }
 });
 
 // ── TOTP SETUP ─────────────────────────────────
@@ -326,8 +433,13 @@ app.post('/auth/setup-mfa/verify', (req, res) => {
   const { token } = req.body;
   const secret    = req.session.pendingTotpSecret;
   if (!secret || !token) return res.status(400).json({ error: 'Missing token.' });
-  if (!authenticator.verify({ token: String(token).trim(), secret })) return res.status(401).json({ error: 'Invalid code. Try again.' });
+  if (!authenticator.verify({ token: String(token).trim(), secret })) {
+    log('warn', 'auth.mfa.setup_fail', { user: db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username, ip: ip(req) });
+    return res.status(401).json({ error: 'Invalid code. Try again.' });
+  }
   db.prepare('UPDATE users SET totp_secret=?, mfa_type=? WHERE id=?').run(secret, 'totp', req.session.userId);
+  const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
+  log('info', 'auth.mfa.setup_complete', { user: username, type: 'totp', ip: ip(req) });
   delete req.session.setupMfa; delete req.session.pendingTotpSecret;
   req.session.authenticated = true;
   res.json({ redirect: '/' });
@@ -338,7 +450,7 @@ app.post('/auth/reset-request', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required.' });
   const user = db.prepare('SELECT * FROM users WHERE email=?').get(email.trim().toLowerCase());
-  if (!user) return res.json({ ok: true }); // avoid enumeration
+  if (!user) return res.json({ ok: true });
   const token     = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   db.prepare('DELETE FROM auth_tokens WHERE user_id=? AND purpose=?').run(user.id, 'password_reset');
@@ -347,9 +459,13 @@ app.post('/auth/reset-request', async (req, res) => {
   try {
     await sendEmail({ to: user.email, subject: 'Harborbucks — Password Reset',
       text:  `Reset your password: ${resetUrl}\n\nExpires in 1 hour.`,
-      html:  `<p>Click to reset your Harborbucks password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Expires in 1 hour. Ignore this if you didn't request it.</p>` });
+      html:  `<p>Click to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Expires in 1 hour.</p>` });
+    log('info', 'auth.password_reset.requested', { user: user.username, ip: ip(req) });
     res.json({ ok: true });
-  } catch(e) { console.error(e); res.status(500).json({ error: 'Failed to send reset email.' }); }
+  } catch(e) {
+    log('error', 'auth.password_reset.email_fail', { user: user.username, msg: e.message });
+    res.status(500).json({ error: 'Failed to send reset email.' });
+  }
 });
 
 app.post('/auth/reset-confirm', async (req, res) => {
@@ -359,11 +475,16 @@ app.post('/auth/reset-confirm', async (req, res) => {
   if (password.length < 8)          return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   const tokenRow  = db.prepare('SELECT * FROM auth_tokens WHERE token_hash=? AND purpose=? AND used=0').get(tokenHash, 'password_reset');
-  if (!tokenRow)              return res.status(400).json({ error: 'Invalid or expired reset link.' });
-  if (Date.now() > tokenRow.expires_at) { db.prepare('DELETE FROM auth_tokens WHERE id=?').run(tokenRow.id); return res.status(400).json({ error: 'Reset link has expired.' }); }
+  if (!tokenRow) return res.status(400).json({ error: 'Invalid or expired reset link.' });
+  if (Date.now() > tokenRow.expires_at) {
+    db.prepare('DELETE FROM auth_tokens WHERE id=?').run(tokenRow.id);
+    return res.status(400).json({ error: 'Reset link has expired.' });
+  }
   const hash = await bcrypt.hash(password, 12);
   db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash, tokenRow.user_id);
   db.prepare('UPDATE auth_tokens SET used=1 WHERE id=?').run(tokenRow.id);
+  const username = db.prepare('SELECT username FROM users WHERE id=?').get(tokenRow.user_id)?.username;
+  log('info', 'auth.password_reset.complete', { user: username, ip: ip(req) });
   res.json({ ok: true });
 });
 
@@ -374,17 +495,16 @@ app.get('/api/me', requireAuth, (req, res) => {
   res.json(u);
 });
 
-// Update own profile
 app.post('/api/me/update', requireAuth, async (req, res) => {
   const { field, value, currentPassword, newPassword, confirmPassword, mfaType } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
-  // Update email
   if (field === 'email') {
     const email = value?.trim() || null;
     try {
       db.prepare('UPDATE users SET email=? WHERE id=?').run(email, user.id);
+      log('info', 'account.email_updated', { user: user.username });
       return res.json({ ok: true });
     } catch(e) {
       if (e.message?.includes('UNIQUE')) return res.status(400).json({ error: 'Email already in use.' });
@@ -392,31 +512,33 @@ app.post('/api/me/update', requireAuth, async (req, res) => {
     }
   }
 
-  // Change password
   if (field === 'password') {
     if (!currentPassword) return res.status(400).json({ error: 'Current password required.' });
     if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
     if (newPassword !== confirmPassword) return res.status(400).json({ error: 'Passwords do not match.' });
     const match = await bcrypt.compare(currentPassword, user.password_hash);
-    if (!match) return res.status(401).json({ error: 'Current password is incorrect.' });
-    const hash = await bcrypt.hash(newPassword, 12);
-    db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash, user.id);
+    if (!match) {
+      log('warn', 'account.password_change.fail', { user: user.username, reason: 'bad_current_password', ip: ip(req) });
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+    db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(await bcrypt.hash(newPassword, 12), user.id);
+    log('info', 'account.password_changed', { user: user.username, ip: ip(req) });
     return res.json({ ok: true });
   }
 
-  // Change MFA type
   if (field === 'mfa') {
     const smtpOk  = !!getSmtpConfig()?.host;
     const allowed = smtpOk ? ['none','totp','email'] : ['none','totp'];
     if (!allowed.includes(mfaType)) return res.status(400).json({ error: 'Invalid MFA type.' });
     if (mfaType === 'email' && !user.email) return res.status(400).json({ error: 'Add an email address before enabling email MFA.' });
     if (mfaType === 'totp') {
-      // Need to go through setup flow
       req.session.setupMfa = true;
       db.prepare('UPDATE users SET mfa_type=?, totp_secret=NULL WHERE id=?').run('totp', user.id);
+      log('info', 'account.mfa_changed', { user: user.username, from: user.mfa_type, to: 'totp' });
       return res.json({ ok: true, redirect: '/setup-mfa' });
     }
     db.prepare('UPDATE users SET mfa_type=?, totp_secret=NULL WHERE id=?').run(mfaType, user.id);
+    log('info', 'account.mfa_changed', { user: user.username, from: user.mfa_type, to: mfaType });
     return res.json({ ok: true });
   }
 
@@ -448,6 +570,8 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
     db.prepare('INSERT INTO users (username,email,password_hash,initials,role,mfa_type,created_at) VALUES (?,?,?,?,?,?,?)')
       .run(username.trim().toLowerCase(), email?.trim()||null, hash, initials.toUpperCase(), chosenRole, chosenMfa, Date.now());
     const u = db.prepare('SELECT id,username,email,initials,role,mfa_type,created_at FROM users WHERE username=?').get(username.trim().toLowerCase());
+    const adminUser = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
+    log('info', 'admin.user.created', { admin: adminUser, new_user: u.username, initials: u.initials, role: chosenRole });
     res.status(201).json(u);
   } catch(e) {
     if (e.message?.includes('UNIQUE')) return res.status(400).json({ error: 'Username, email, or initials already taken.' });
@@ -459,15 +583,21 @@ app.patch('/api/admin/users/:id/reset-password', requireAdmin, async (req, res) 
   const { id } = req.params;
   const { password } = req.body;
   if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  const target    = db.prepare('SELECT username FROM users WHERE id=?').get(id);
+  const adminUser = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
   const result = db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(await bcrypt.hash(password, 12), id);
   if (!result.changes) return res.status(404).json({ error: 'User not found.' });
+  log('warn', 'admin.user.password_reset', { admin: adminUser, target: target?.username, ip: ip(req) });
   res.json({ ok: true });
 });
 
 app.patch('/api/admin/users/:id/reset-mfa', requireAdmin, (req, res) => {
   const { id } = req.params;
+  const target    = db.prepare('SELECT username FROM users WHERE id=?').get(id);
+  const adminUser = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
   const result = db.prepare('UPDATE users SET mfa_type=?,totp_secret=NULL WHERE id=?').run('none', id);
   if (!result.changes) return res.status(404).json({ error: 'User not found.' });
+  log('warn', 'admin.user.mfa_reset', { admin: adminUser, target: target?.username });
   res.json({ ok: true });
 });
 
@@ -480,19 +610,24 @@ app.patch('/api/admin/users/:id/role', requireAdmin, (req, res) => {
     const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role='admin'").get().c;
     if (target?.role === 'admin' && adminCount <= 1) return res.status(400).json({ error: 'Cannot remove the last admin.' });
   }
+  const target    = db.prepare('SELECT username FROM users WHERE id=?').get(id);
+  const adminUser = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
   const result = db.prepare('UPDATE users SET role=? WHERE id=?').run(role, id);
   if (!result.changes) return res.status(404).json({ error: 'User not found.' });
+  log('info', 'admin.user.role_changed', { admin: adminUser, target: target?.username, new_role: role });
   res.json({ ok: true });
 });
 
 app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   if (Number(id) === req.session.userId) return res.status(400).json({ error: "Can't delete your own account." });
-  const target     = db.prepare('SELECT role FROM users WHERE id=?').get(id);
+  const target     = db.prepare('SELECT username,role FROM users WHERE id=?').get(id);
   const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role='admin'").get().c;
   if (target?.role === 'admin' && adminCount <= 1) return res.status(400).json({ error: 'Cannot delete the last admin.' });
+  const adminUser = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
   const result = db.prepare('DELETE FROM users WHERE id=?').run(id);
   if (!result.changes) return res.status(404).json({ error: 'User not found.' });
+  log('warn', 'admin.user.deleted', { admin: adminUser, target: target?.username });
   res.json({ ok: true });
 });
 
@@ -507,7 +642,11 @@ app.get('/api/admin/settings', requireAdmin, (_req, res) => {
 
 app.post('/api/admin/settings', requireAdmin, (req, res) => {
   const { allowRegistration, smtp } = req.body;
-  if (allowRegistration !== undefined) setConfig('allow_registration', allowRegistration ? '1' : '0');
+  const adminUser = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
+  if (allowRegistration !== undefined) {
+    setConfig('allow_registration', allowRegistration ? '1' : '0');
+    log('info', 'admin.settings.registration', { admin: adminUser, enabled: allowRegistration });
+  }
   if (smtp) {
     const existing = getSmtpConfig() || {};
     setConfig('smtp_config', JSON.stringify({
@@ -518,17 +657,60 @@ app.post('/api/admin/settings', requireAdmin, (req, res) => {
       from:   smtp.from   || '',
       secure: smtp.secure || false,
     }));
+    log('info', 'admin.settings.smtp_updated', { admin: adminUser, host: smtp.host });
   }
   res.json({ ok: true });
 });
 
 app.post('/api/admin/settings/test-smtp', requireAdmin, async (req, res) => {
-  const u = db.prepare('SELECT email FROM users WHERE id=?').get(req.session.userId);
+  const u = db.prepare('SELECT email,username FROM users WHERE id=?').get(req.session.userId);
   if (!u?.email) return res.status(400).json({ error: 'Your account has no email address to send the test to.' });
   try {
     await sendEmail({ to: u.email, subject: 'Harborbucks — SMTP Test', text: 'SMTP is working correctly.', html: '<p>SMTP is working correctly.</p>' });
+    log('info', 'admin.smtp.test_ok', { admin: u.username, to: u.email });
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    log('error', 'admin.smtp.test_fail', { admin: u.username, msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── ADMIN: LOGS ────────────────────────────────
+app.get('/api/admin/logs', requireAdmin, (req, res) => {
+  const limit  = Math.min(parseInt(req.query.limit)  || 500, 2000);
+  const level  = req.query.level  || '';
+  const search = req.query.search || '';
+
+  if (!fs.existsSync(LOG_PATH)) return res.json([]);
+  try {
+    const stat      = fs.statSync(LOG_PATH);
+    const chunkSize = Math.min(stat.size, 1024 * 1024); // read last 1 MB
+    const buf       = Buffer.alloc(chunkSize);
+    const fd        = fs.openSync(LOG_PATH, 'r');
+    fs.readSync(fd, buf, 0, chunkSize, stat.size - chunkSize);
+    fs.closeSync(fd);
+
+    const entries = buf.toString('utf8')
+      .split('\n')
+      .filter(l => l.trim())
+      .map(l => { try { return JSON.parse(l); } catch { return null; } })
+      .filter(Boolean)
+      .reverse()
+      .filter(e => !level  || e.level === level)
+      .filter(e => !search || JSON.stringify(e).toLowerCase().includes(search.toLowerCase()))
+      .slice(0, limit);
+
+    res.json(entries);
+  } catch(e) {
+    res.status(500).json({ error: 'Failed to read logs.' });
+  }
+});
+
+app.get('/api/admin/logs/download', requireAdmin, (req, res) => {
+  if (!fs.existsSync(LOG_PATH)) return res.status(404).send('No log file yet.');
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Content-Disposition', `attachment; filename="harborbucks-${new Date().toISOString().slice(0,10)}.log"`);
+  fs.createReadStream(LOG_PATH).pipe(res);
 });
 
 // ── ENTRIES API ────────────────────────────────
@@ -541,7 +723,7 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 
 app.get('/api/entries', requireAuth, (_req, res) => {
   try { res.json(db.prepare('SELECT * FROM entries ORDER BY created_at DESC').all().map(rowToEntry)); }
-  catch(e) { res.status(500).json({ error: 'Failed to fetch entries.' }); }
+  catch(e) { log('error', 'entries.fetch_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to fetch entries.' }); }
 });
 
 app.post('/api/entries', requireAuth, (req, res) => {
@@ -555,8 +737,10 @@ app.post('/api/entries', requireAuth, (req, res) => {
     const e = { id: uid(), serials: JSON.stringify(serials), check_number: checkNumber,
       voucher_count: voucherCount, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), voided: 0, created_at: Date.now() };
     db.prepare('INSERT INTO entries (id,serials,check_number,voucher_count,amount,manager,voided,created_at) VALUES (@id,@serials,@check_number,@voucher_count,@amount,@manager,@voided,@created_at)').run(e);
+    const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
+    log('info', 'entry.created', { user: username, manager, checkNumber, amount: parseFloat(amount), serials });
     res.status(201).json(rowToEntry(e));
-  } catch(e) { res.status(500).json({ error: 'Failed to create entry.' }); }
+  } catch(e) { log('error', 'entry.create_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to create entry.' }); }
 });
 
 app.put('/api/entries/:id', requireAuth, (req, res) => {
@@ -568,8 +752,10 @@ app.put('/api/entries/:id', requireAuth, (req, res) => {
     const result = db.prepare('UPDATE entries SET serials=@serials,check_number=@check_number,voucher_count=@voucher_count,amount=@amount,manager=@manager WHERE id=@id')
       .run({ id, serials: JSON.stringify(serials), check_number: checkNumber, voucher_count: voucherCount, amount: parseFloat(amount), manager: manager.trim().toUpperCase() });
     if (!result.changes) return res.status(404).json({ error: 'Entry not found.' });
+    const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
+    log('info', 'entry.edited', { user: username, entryId: id, checkNumber, amount: parseFloat(amount) });
     res.json(rowToEntry(db.prepare('SELECT * FROM entries WHERE id=?').get(id)));
-  } catch(e) { res.status(500).json({ error: 'Failed to update entry.' }); }
+  } catch(e) { log('error', 'entry.edit_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to update entry.' }); }
 });
 
 app.patch('/api/entries/:id/void', requireAuth, (req, res) => {
@@ -578,12 +764,14 @@ app.patch('/api/entries/:id/void', requireAuth, (req, res) => {
     const row = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
     if (!row) return res.status(404).json({ error: 'Entry not found.' });
     db.prepare('UPDATE entries SET voided=? WHERE id=?').run(row.voided ? 0 : 1, id);
-    res.json(rowToEntry(db.prepare('SELECT * FROM entries WHERE id=?').get(id)));
-  } catch(e) { res.status(500).json({ error: 'Failed to toggle void.' }); }
+    const updated  = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
+    const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
+    log('warn', updated.voided ? 'entry.voided' : 'entry.restored', { user: username, entryId: id, checkNumber: row.check_number, amount: row.amount });
+    res.json(rowToEntry(updated));
+  } catch(e) { log('error', 'entry.void_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to toggle void.' }); }
 });
 
 // ── START ──────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Harborbucks running on http://0.0.0.0:${PORT}`);
-  console.log(`Database: ${DB_PATH}`);
+  log('info', 'server.start', { port: PORT, db: DB_PATH, log: LOG_PATH });
 });
