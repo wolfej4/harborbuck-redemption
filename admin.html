@@ -162,19 +162,44 @@ select option{background:var(--navy-mid)}
 
     <div class="section-title" style="margin-top:28px">SMTP Configuration</div>
     <div class="form-card">
-      <div class="form-grid">
-        <div class="field"><label>SMTP Host</label><input id="smtp-host" type="text" placeholder="smtp.example.com" autocomplete="off"></div>
-        <div class="field"><label>Port</label><input id="smtp-port" type="number" placeholder="587" min="1" max="65535"></div>
-        <div class="field"><label>Username</label><input id="smtp-user" type="text" placeholder="user@example.com" autocomplete="off"></div>
-        <div class="field"><label>Password <span class="hint" style="display:inline">leave blank to keep existing</span></label><input id="smtp-pass" type="password" placeholder="••••••••" autocomplete="off"></div>
-        <div class="field"><label>From Address</label><input id="smtp-from" type="email" placeholder="noreply@example.com" autocomplete="off"></div>
-        <div class="field" style="justify-content:flex-end;padding-bottom:4px">
-          <label style="margin-bottom:auto"> </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.72rem;color:var(--cream-dim);text-transform:none;letter-spacing:0">
-            <input type="checkbox" id="smtp-secure" style="width:14px;height:14px;padding:0;accent-color:var(--brass)"> Use TLS/SSL
+
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="field">
+          <label>SMTP Host</label>
+          <input id="smtp-host" type="text" placeholder="smtp.example.com" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Port</label>
+          <input id="smtp-port" type="number" placeholder="587" min="1" max="65535">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="field">
+          <label>Username</label>
+          <input id="smtp-user" type="text" placeholder="user@example.com" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input id="smtp-pass" type="password" placeholder="••••••••" autocomplete="off">
+          <div class="hint">Leave blank to keep the existing password.</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+        <div class="field">
+          <label>From Address</label>
+          <input id="smtp-from" type="email" placeholder="noreply@example.com" autocomplete="off">
+        </div>
+        <div class="field" style="justify-content:flex-end">
+          <label>&nbsp;</label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--cream-dim);text-transform:none;letter-spacing:0;background:var(--navy-light);border:1px solid var(--rule);padding:10px 14px;user-select:none">
+            <input type="checkbox" id="smtp-secure" style="width:15px;height:15px;flex-shrink:0;accent-color:var(--brass)">
+            Use TLS / SSL
           </label>
         </div>
       </div>
+
       <div class="form-actions">
         <button class="btn btn-primary" onclick="saveSMTP()">Save SMTP</button>
         <button class="btn btn-ghost" onclick="testSMTP()">Send Test Email</button>
