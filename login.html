@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harborbucks — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0c1a2e; --navy-mid: #132238; --navy-light: #1a3050;
+    --brass: #c49a3c; --brass-light: #e0b84a; --brass-dim: #8a6a20;
+    --cream: #f0e8d8; --cream-dim: #b8ad99;
+    --red: #c0392b; --rule: rgba(196,154,60,0.25);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--navy);
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(196,154,60,0.06) 39px, rgba(196,154,60,0.06) 40px);
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 24px;
+  }
+  .brand {
+    text-align: center;
+    margin-bottom: 36px;
+  }
+  .brand h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.6rem;
+    font-weight: 900;
+    color: var(--brass-light);
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+  .brand p {
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--brass-dim);
+    margin-top: 6px;
+  }
+  .card {
+    background: var(--navy-mid);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--brass);
+    padding: 36px 40px;
+    width: 100%;
+    max-width: 380px;
+  }
+  .card-title {
+    font-size: 0.68rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--brass);
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  label {
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass-dim);
+  }
+  input {
+    background: var(--navy-light);
+    border: 1px solid var(--rule);
+    border-bottom: 2px solid var(--brass-dim);
+    color: var(--cream);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.92rem;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+    width: 100%;
+  }
+  input::placeholder { color: rgba(176,166,148,0.35); }
+  input:focus { border-bottom-color: var(--brass-light); background: rgba(26,48,80,0.8); }
+  .btn {
+    width: 100%;
+    margin-top: 8px;
+    background: var(--brass);
+    color: var(--navy);
+    border: none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn:hover:not(:disabled) { background: var(--brass-light); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .error {
+    font-size: 0.75rem;
+    color: #e08080;
+    background: rgba(192,57,43,0.12);
+    border-left: 3px solid var(--red);
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .error.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="brand">
+  <h1>⚓ Harborbucks</h1>
+  <p>Voucher Ledger &mdash; Internal Use Only</p>
+</div>
+
+<div class="card">
+  <div class="card-title">Sign In</div>
+  <div class="error" id="err"></div>
+  <div class="field">
+    <label for="username">Username</label>
+    <input id="username" type="text" placeholder="username" autocomplete="username" autofocus>
+  </div>
+  <div class="field">
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="••••••••" autocomplete="current-password">
+  </div>
+  <button class="btn" id="btn" onclick="login()">Sign In</button>
+</div>
+
+<script>
+  document.getElementById('password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') login();
+  });
+
+  async function login() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const btn = document.getElementById('btn');
+    const err = document.getElementById('err');
+
+    if (!username || !password) return showErr('Please enter your username and password.');
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+    err.classList.remove('show');
+
+    try {
+      const res  = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) return showErr(data.error || 'Login failed.');
+      window.location.href = data.redirect;
+    } catch (e) {
+      showErr('Network error. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  }
+
+  function showErr(msg) {
+    const el = document.getElementById('err');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+</script>
+</body>
+</html>

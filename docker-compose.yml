@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  harborbucks:
+    build: .
+    container_name: harborbucks
+    restart: unless-stopped
+    ports:
+      - "8099:3000"     # change 8099 to any free port
+    volumes:
+      - /opt/appdata/harborbucks:/data   # SQLite file lives here
+    environment:
+      - DB_PATH=/data/harborbucks.db
+      - PORT=3000

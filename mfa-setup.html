@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harborbucks — Set Up MFA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0c1a2e; --navy-mid: #132238; --navy-light: #1a3050;
+    --brass: #c49a3c; --brass-light: #e0b84a; --brass-dim: #8a6a20;
+    --cream: #f0e8d8; --cream-dim: #b8ad99;
+    --red: #c0392b; --green: #2e7d52; --rule: rgba(196,154,60,0.25);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--navy);
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(196,154,60,0.06) 39px, rgba(196,154,60,0.06) 40px);
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace; padding: 24px;
+  }
+  .brand { text-align: center; margin-bottom: 36px; }
+  .brand h1 { font-family: 'Playfair Display', serif; font-size: 2.6rem; font-weight: 900; color: var(--brass-light); letter-spacing: 0.04em; line-height: 1; }
+  .brand p { font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass-dim); margin-top: 6px; }
+  .card {
+    background: var(--navy-mid);
+    border: 1px solid var(--rule); border-top: 3px solid var(--brass);
+    padding: 36px 40px; width: 100%; max-width: 440px;
+  }
+  .card-title { font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--brass); border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 8px; }
+  .card-sub { font-size: 0.72rem; color: var(--cream-dim); margin-bottom: 24px; line-height: 1.6; }
+
+  .steps { counter-reset: step; display: flex; flex-direction: column; gap: 20px; margin-bottom: 28px; }
+  .step { display: flex; gap: 14px; align-items: flex-start; }
+  .step-num {
+    counter-increment: step;
+    min-width: 24px; height: 24px;
+    background: var(--brass-dim); color: var(--navy);
+    font-size: 0.7rem; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-body { font-size: 0.78rem; color: var(--cream-dim); line-height: 1.6; }
+  .step-body strong { color: var(--cream); }
+
+  .qr-wrap {
+    background: white;
+    padding: 12px;
+    display: inline-block;
+    margin: 12px 0 4px;
+  }
+  .qr-wrap img { display: block; width: 196px; height: 196px; }
+
+  .secret-box {
+    font-size: 0.78rem;
+    background: var(--navy-light);
+    border: 1px solid var(--rule);
+    padding: 8px 12px;
+    color: var(--brass);
+    letter-spacing: 0.1em;
+    margin-top: 8px;
+    word-break: break-all;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .secret-box:hover { background: rgba(26,48,80,0.8); }
+  .secret-label { font-size: 0.6rem; color: var(--cream-dim); margin-top: 3px; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  label { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--brass-dim); }
+  input {
+    background: var(--navy-light); border: 1px solid var(--rule); border-bottom: 2px solid var(--brass-dim);
+    color: var(--cream); font-family: 'IBM Plex Mono', monospace; font-size: 1.3rem;
+    padding: 10px 12px; outline: none; transition: border-color 0.15s; width: 100%;
+    letter-spacing: 0.25em; text-align: center;
+  }
+  input:focus { border-bottom-color: var(--brass-light); }
+
+  .btn {
+    width: 100%; background: var(--brass); color: var(--navy); border: none;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; padding: 13px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn:hover:not(:disabled) { background: var(--brass-light); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .error { font-size: 0.75rem; color: #e08080; background: rgba(192,57,43,0.12); border-left: 3px solid var(--red); padding: 10px 12px; margin-bottom: 16px; display: none; }
+  .error.show { display: block; }
+
+  .loading-qr { font-size: 0.75rem; color: var(--cream-dim); padding: 40px 0; text-align: center; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="brand">
+  <h1>⚓ Harborbucks</h1>
+  <p>Voucher Ledger &mdash; Internal Use Only</p>
+</div>
+
+<div class="card">
+  <div class="card-title">Set Up Authenticator</div>
+  <div class="card-sub">MFA is required. This only needs to be done once.</div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        Install an authenticator app on your phone —
+        <strong>Google Authenticator</strong>, <strong>Authy</strong>, or <strong>1Password</strong> all work.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        Scan the QR code below, or enter the secret key manually.
+        <div id="qr-area"><div class="loading-qr">Generating QR code…</div></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">Enter the 6-digit code from your app to confirm setup.</div>
+    </div>
+  </div>
+
+  <div class="error" id="err"></div>
+
+  <div class="field">
+    <label for="token">Verification Code</label>
+    <input id="token" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="one-time-code" autofocus>
+  </div>
+
+  <button class="btn" id="btn" onclick="verify()">Confirm &amp; Enter App →</button>
+</div>
+
+<script>
+  let secretKey = '';
+
+  async function loadQR() {
+    try {
+      const res  = await fetch('/auth/setup-mfa/qr');
+      const data = await res.json();
+      if (!res.ok) { document.getElementById('qr-area').innerHTML = '<div class="loading-qr" style="color:#e08080">Failed to load QR code. Refresh to try again.</div>'; return; }
+
+      secretKey = data.secret;
+      document.getElementById('qr-area').innerHTML = `
+        <div class="qr-wrap"><img src="${data.qrDataUrl}" alt="QR Code"></div>
+        <div class="secret-box" onclick="copySecret()" title="Click to copy">${data.secret}</div>
+        <div class="secret-label">Can't scan? Enter this key manually in your app. Click to copy.</div>
+      `;
+    } catch (e) {
+      document.getElementById('qr-area').innerHTML = '<div class="loading-qr" style="color:#e08080">Network error loading QR code.</div>';
+    }
+  }
+
+  function copySecret() {
+    navigator.clipboard?.writeText(secretKey);
+  }
+
+  document.getElementById('token').addEventListener('keydown', e => {
+    if (e.key === 'Enter') verify();
+  });
+
+  // Auto-submit when 6 digits entered
+  document.getElementById('token').addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+    if (e.target.value.length === 6) verify();
+  });
+
+  async function verify() {
+    const token = document.getElementById('token').value.trim();
+    const btn   = document.getElementById('btn');
+    if (token.length !== 6) return showErr('Enter the 6-digit code from your authenticator app.');
+
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+    document.getElementById('err').classList.remove('show');
+
+    try {
+      const res  = await fetch('/auth/setup-mfa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById('token').value = '';
+        document.getElementById('token').focus();
+        return showErr(data.error || 'Verification failed.');
+      }
+      window.location.href = data.redirect;
+    } catch (e) {
+      showErr('Network error. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Confirm & Enter App →';
+    }
+  }
+
+  function showErr(msg) {
+    const el = document.getElementById('err');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+
+  loadQR();
+</script>
+</body>
+</html>

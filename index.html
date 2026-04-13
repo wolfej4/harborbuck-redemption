@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harborbucks Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0c1a2e;
+    --navy-mid: #132238;
+    --navy-light: #1a3050;
+    --brass: #c49a3c;
+    --brass-light: #e0b84a;
+    --brass-dim: #8a6a20;
+    --cream: #f0e8d8;
+    --cream-dim: #b8ad99;
+    --red: #c0392b;
+    --red-dim: #7d241b;
+    --green: #2e7d52;
+    --rule: rgba(196, 154, 60, 0.25);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--navy);
+    color: var(--cream);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(
+        0deg, transparent, transparent 39px,
+        rgba(196,154,60,0.06) 39px, rgba(196,154,60,0.06) 40px
+      );
+  }
+
+  /* ── HEADER ─────────────────────────────────── */
+  header {
+    border-bottom: 2px solid var(--brass);
+    padding: 24px 40px 20px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    background: linear-gradient(180deg, rgba(196,154,60,0.08) 0%, transparent 100%);
+  }
+
+  .logo-block h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.4rem;
+    font-weight: 900;
+    color: var(--brass-light);
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+
+  .logo-block p {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--brass-dim);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .header-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--cream-dim);
+    text-align: right;
+    line-height: 1.8;
+  }
+
+  #live-date { color: var(--brass); }
+
+  /* ── LAYOUT ─────────────────────────────────── */
+  .app-wrap { max-width: 1200px; margin: 0 auto; padding: 32px 40px 60px; }
+
+  /* ── LOADING OVERLAY ─────────────────────────── */
+  #loading-overlay {
+    position: fixed; inset: 0;
+    background: var(--navy);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 300;
+    transition: opacity 0.3s;
+  }
+
+  #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .spinner {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--brass-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* ── SUMMARY CARDS ───────────────────────────── */
+  .summary-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 36px;
+  }
+
+  .stat-card {
+    background: var(--navy-mid);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--brass);
+    padding: 18px 20px;
+  }
+
+  .stat-card .label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--cream-dim);
+    margin-bottom: 8px;
+  }
+
+  .stat-card .value {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    color: var(--brass-light);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .stat-card .sub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--cream-dim);
+    margin-top: 6px;
+  }
+
+  /* ── MANAGER BREAKDOWN ───────────────────────── */
+  .manager-breakdown {
+    background: var(--navy-mid);
+    border: 1px solid var(--rule);
+    padding: 20px 24px;
+    margin-bottom: 36px;
+  }
+
+  .section-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--brass);
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+  }
+
+  .manager-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(196,154,60,0.08);
+    font-size: 0.88rem;
+  }
+
+  .manager-row:last-child { border-bottom: none; }
+  .manager-name { color: var(--cream); }
+  .manager-stats { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--cream-dim); }
+  .manager-stats span { color: var(--brass-light); }
+
+  .no-data {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--cream-dim);
+    font-style: italic;
+  }
+
+  /* ── FORM ─────────────────────────────────────── */
+  .form-section {
+    background: var(--navy-mid);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--brass);
+    padding: 28px 28px 24px;
+    margin-bottom: 36px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+
+  label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass-dim);
+  }
+
+  input, select {
+    background: var(--navy-light);
+    border: 1px solid var(--rule);
+    border-bottom: 2px solid var(--brass-dim);
+    color: var(--cream);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.92rem;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+    width: 100%;
+  }
+
+  input::placeholder { color: rgba(176,166,148,0.35); }
+  input:focus, select:focus {
+    border-bottom-color: var(--brass-light);
+    background: rgba(26,48,80,0.8);
+  }
+
+  select option { background: var(--navy-mid); }
+  .form-actions { display: flex; gap: 12px; align-items: center; }
+
+  .btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 11px 24px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--brass); color: var(--navy); font-weight: 600; }
+  .btn-primary:hover:not(:disabled) { background: var(--brass-light); }
+  .btn-ghost { background: transparent; color: var(--cream-dim); border: 1px solid var(--rule); }
+  .btn-ghost:hover { border-color: var(--brass-dim); color: var(--cream); }
+  .btn-export { background: transparent; color: var(--brass); border: 1px solid var(--brass-dim); margin-left: auto; }
+  .btn-export:hover { background: rgba(196,154,60,0.1); }
+
+  /* ── TAG INPUT ─────────────────────────────────── */
+  .tag-input-wrap {
+    background: var(--navy-light);
+    border: 1px solid var(--rule);
+    border-bottom: 2px solid var(--brass-dim);
+    min-height: 42px;
+    padding: 5px 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+    cursor: text;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .tag-input-wrap:focus-within {
+    border-bottom-color: var(--brass-light);
+    background: rgba(26,48,80,0.8);
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(196,154,60,0.18);
+    border: 1px solid rgba(196,154,60,0.35);
+    color: var(--brass-light);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    padding: 2px 7px 2px 9px;
+    white-space: nowrap;
+    animation: tagPop 0.12s ease;
+  }
+
+  @keyframes tagPop {
+    from { transform: scale(0.85); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+
+  .tag-x {
+    background: none; border: none; color: var(--brass-dim);
+    cursor: pointer; font-size: 0.9rem; line-height: 1;
+    padding: 0; display: flex; align-items: center; transition: color 0.1s;
+  }
+
+  .tag-x:hover { color: var(--red); }
+
+  .tag-text-input {
+    background: none; border: none; border-bottom: none !important;
+    color: var(--cream); font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.88rem; outline: none; padding: 3px 4px;
+    min-width: 120px; flex: 1; width: auto !important;
+  }
+
+  .tag-hint {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6rem; color: var(--brass-dim); margin-top: 4px; letter-spacing: 0.06em;
+  }
+
+  /* ── TABLE ─────────────────────────────────────── */
+  .table-section { overflow-x: auto; }
+
+  .table-header-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px; flex-wrap: wrap; gap: 10px;
+  }
+
+  .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .filter-input {
+    background: var(--navy-mid); border: 1px solid var(--rule);
+    color: var(--cream); font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem; padding: 7px 12px; outline: none; width: 160px;
+  }
+
+  .filter-input:focus { border-color: var(--brass-dim); }
+
+  .void-toggle {
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;
+    color: var(--cream-dim); cursor: pointer; user-select: none;
+  }
+
+  .void-toggle input[type="checkbox"] { accent-color: var(--brass); width: 14px; height: 14px; }
+
+  table { width: 100%; border-collapse: collapse; min-width: 700px; }
+  thead tr { border-bottom: 2px solid var(--brass); }
+
+  th {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.63rem;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--brass-dim);
+    padding: 10px 12px; text-align: left; white-space: nowrap;
+  }
+
+  tbody tr { border-bottom: 1px solid var(--rule); transition: background 0.1s; }
+  tbody tr:hover { background: rgba(196,154,60,0.04); }
+  tbody tr.voided { opacity: 0.4; }
+  tbody tr.voided td { text-decoration: line-through; }
+
+  td {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.83rem;
+    padding: 11px 12px; color: var(--cream); vertical-align: middle;
+  }
+
+  td.amount { color: var(--brass-light); font-weight: 500; }
+
+  .void-badge {
+    font-size: 0.6rem; letter-spacing: 0.1em;
+    background: var(--red-dim); color: #ffaaaa;
+    padding: 2px 7px; text-transform: uppercase;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .action-cell { display: flex; gap: 6px; }
+
+  .btn-sm {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 4px 10px; border: none; cursor: pointer; transition: all 0.12s;
+  }
+
+  .btn-edit { background: rgba(196,154,60,0.15); color: var(--brass); border: 1px solid rgba(196,154,60,0.3); }
+  .btn-edit:hover { background: rgba(196,154,60,0.28); }
+  .btn-void { background: rgba(192,57,43,0.15); color: #e08080; border: 1px solid rgba(192,57,43,0.3); }
+  .btn-void:hover { background: rgba(192,57,43,0.3); }
+  .btn-restore { background: rgba(46,125,82,0.15); color: #80d4aa; border: 1px solid rgba(46,125,82,0.3); }
+  .btn-restore:hover { background: rgba(46,125,82,0.3); }
+
+  .serial-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+  .serial-pill {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;
+    background: rgba(196,154,60,0.1); border: 1px solid rgba(196,154,60,0.2);
+    color: var(--cream-dim); padding: 1px 6px;
+  }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--cream-dim);
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem; letter-spacing: 0.08em;
+  }
+
+  .empty-state .icon { font-size: 2.4rem; margin-bottom: 12px; opacity: 0.3; }
+
+  /* ── MODAL ─────────────────────────────────────── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(8,15,26,0.85); z-index: 100;
+    align-items: center; justify-content: center;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--navy-mid); border: 1px solid var(--brass-dim);
+    border-top: 3px solid var(--brass); padding: 32px; width: 100%; max-width: 560px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6); animation: slideUp 0.18s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+
+  .modal h2 { font-family: 'Playfair Display', serif; font-size: 1.4rem; color: var(--brass-light); margin-bottom: 24px; }
+  .modal .form-grid { grid-template-columns: 1fr 1fr; }
+  .modal .form-actions { margin-top: 24px; }
+
+  /* ── TOAST ─────────────────────────────────────── */
+  .toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: var(--navy-light); border-left: 3px solid var(--brass);
+    color: var(--cream); font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem; padding: 12px 18px; z-index: 200;
+    opacity: 0; transform: translateY(10px); transition: all 0.2s; pointer-events: none;
+  }
+
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.error { border-left-color: var(--red); }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--navy); }
+  ::-webkit-scrollbar-thumb { background: var(--brass-dim); }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay"><div class="spinner">Loading Ledger…</div></div>
+
+<header>
+  <div class="logo-block">
+    <h1>⚓ Harborbucks</h1>
+    <p>Voucher Ledger &mdash; Internal Use Only</p>
+  </div>
+  <div class="header-meta">
+    <div id="live-date"></div>
+    <div id="entry-count-header">— entries logged</div>
+    <a href="/auth/logout" style="font-family:'IBM Plex Mono',monospace;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--brass-dim);text-decoration:none;margin-top:4px;display:inline-block;" onmouseover="this.style.color='var(--brass)'" onmouseout="this.style.color='var(--brass-dim)'">Sign Out →</a>
+  </div>
+</header>
+
+<div class="app-wrap">
+
+  <!-- SUMMARY CARDS -->
+  <div class="summary-row">
+    <div class="stat-card">
+      <div class="label">Total Redeemed</div>
+      <div class="value" id="stat-total">$0.00</div>
+      <div class="sub" id="stat-voided-note"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Active Vouchers</div>
+      <div class="value" id="stat-vouchers">0</div>
+      <div class="sub">units</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Entries</div>
+      <div class="value" id="stat-entries">0</div>
+      <div class="sub" id="stat-voided-count">0 voided</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Avg per Entry</div>
+      <div class="value" id="stat-avg">$0.00</div>
+      <div class="sub">active entries</div>
+    </div>
+  </div>
+
+  <!-- MANAGER BREAKDOWN -->
+  <div class="manager-breakdown">
+    <div class="section-title">By Manager</div>
+    <div id="manager-list"><span class="no-data">No entries yet.</span></div>
+  </div>
+
+  <!-- ENTRY FORM -->
+  <div class="form-section">
+    <div class="section-title">New Entry</div>
+    <div class="form-grid">
+      <div class="field-group" style="grid-column: span 2">
+        <label>Serial Numbers</label>
+        <div class="tag-input-wrap" id="f-serial-wrap"
+             onclick="document.getElementById('f-serial-input').focus()">
+          <input id="f-serial-input" class="tag-text-input" type="text"
+            placeholder="Type a serial, press Enter…" autocomplete="off"
+            onkeydown="handleSerialKey(event,'form')" oninput="handleSerialInput(event,'form')">
+        </div>
+        <div class="tag-hint">Press Enter, Tab, or Space after each serial number</div>
+      </div>
+      <div class="field-group">
+        <label for="f-check">Check Number</label>
+        <input id="f-check" type="text" placeholder="e.g. 10247" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label for="f-count">Number of Vouchers</label>
+        <input id="f-count" type="number" min="1" placeholder="1" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label for="f-amount">Amount ($)</label>
+        <input id="f-amount" type="number" min="0" step="0.01" placeholder="0.00" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label for="f-manager">Manager Name</label>
+        <input id="f-manager" type="text" placeholder="Full name" autocomplete="off" list="manager-suggestions">
+        <datalist id="manager-suggestions"></datalist>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" id="submit-btn" onclick="submitEntry()">Log Entry</button>
+      <button class="btn btn-ghost" onclick="clearForm()">Clear</button>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-section">
+    <div class="table-header-row">
+      <div class="section-title" style="margin-bottom:0;border:none;padding:0;">Ledger</div>
+      <div class="filter-row">
+        <input class="filter-input" id="filter-manager" placeholder="Filter by manager…" oninput="renderTable()">
+        <label class="void-toggle">
+          <input type="checkbox" id="show-voided" onchange="renderTable()">
+          Show voided
+        </label>
+        <button class="btn btn-sm btn-export" onclick="exportCSV()">↓ Export CSV</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date &amp; Time</th>
+          <th>Serial #(s)</th>
+          <th>Check #</th>
+          <th># Vouchers</th>
+          <th>Amount</th>
+          <th>Manager</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="ledger-body"></tbody>
+    </table>
+    <div id="empty-state" class="empty-state" style="display:none;">
+      <div class="icon">⚓</div>
+      <div>No entries found.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h2>Edit Entry</h2>
+    <div class="form-grid">
+      <div class="field-group" style="grid-column: span 2">
+        <label>Serial Numbers</label>
+        <div class="tag-input-wrap" id="e-serial-wrap"
+             onclick="document.getElementById('e-serial-input').focus()">
+          <input id="e-serial-input" class="tag-text-input" type="text"
+            placeholder="Type a serial, press Enter…" autocomplete="off"
+            onkeydown="handleSerialKey(event,'edit')" oninput="handleSerialInput(event,'edit')">
+        </div>
+        <div class="tag-hint">Press Enter, Tab, or Space after each serial number</div>
+      </div>
+      <div class="field-group">
+        <label for="e-check">Check Number</label>
+        <input id="e-check" type="text" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label for="e-count">Number of Vouchers</label>
+        <input id="e-count" type="number" min="1" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label for="e-amount">Amount ($)</label>
+        <input id="e-amount" type="number" min="0" step="0.01" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label for="e-manager">Manager Name</label>
+        <input id="e-manager" type="text" autocomplete="off">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" id="save-btn" onclick="saveEdit()">Save Changes</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── STATE ─────────────────────────────────────
+  let entries = [];
+  let editingId = null;
+  const tagState = { form: [], edit: [] };
+
+  // ── INIT ──────────────────────────────────────
+  async function init() {
+    updateDateHeader();
+    setInterval(updateDateHeader, 30000);
+    document.getElementById('edit-modal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+    await loadEntries();
+    document.getElementById('loading-overlay').classList.add('hidden');
+  }
+
+  function updateDateHeader() {
+    const now = new Date();
+    document.getElementById('live-date').textContent =
+      now.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  // ── API ───────────────────────────────────────
+  async function api(method, path, body) {
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch('/api' + path, opts);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  async function loadEntries() {
+    try {
+      entries = await api('GET', '/entries');
+      renderAll();
+    } catch (err) {
+      toast('Could not load entries: ' + err.message, true);
+    }
+  }
+
+  // ── TAG INPUT ─────────────────────────────────
+  function handleSerialKey(e, ctx) {
+    const input = e.target;
+    const v = input.value.trim();
+    if (['Enter', 'Tab', ' '].includes(e.key)) {
+      e.preventDefault();
+      if (v) commitTag(ctx, v, input);
+    } else if (e.key === 'Backspace' && !input.value && tagState[ctx].length > 0) {
+      removeTag(ctx, tagState[ctx].length - 1);
+    }
+  }
+
+  function handleSerialInput(e, ctx) {
+    const input = e.target;
+    if (input.value.includes(',') || input.value.includes(';')) {
+      input.value.split(/[,;]/).map(s => s.trim()).filter(Boolean)
+        .forEach(p => commitTag(ctx, p, input));
+      input.value = '';
+    }
+  }
+
+  function commitTag(ctx, value, input) {
+    const clean = value.trim();
+    if (!clean) return;
+    if (tagState[ctx].includes(clean)) {
+      toast('Duplicate serial: ' + clean, true);
+      if (input) input.value = '';
+      return;
+    }
+    tagState[ctx].push(clean);
+    if (input) input.value = '';
+    renderTags(ctx);
+  }
+
+  function removeTag(ctx, index) {
+    tagState[ctx].splice(index, 1);
+    renderTags(ctx);
+  }
+
+  function renderTags(ctx) {
+    const wrapId  = ctx === 'form' ? 'f-serial-wrap'  : 'e-serial-wrap';
+    const inputId = ctx === 'form' ? 'f-serial-input' : 'e-serial-input';
+    const wrap  = document.getElementById(wrapId);
+    const input = document.getElementById(inputId);
+
+    wrap.querySelectorAll('.tag').forEach(t => t.remove());
+
+    tagState[ctx].forEach((serial, i) => {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.innerHTML = `${esc(serial)}<button class="tag-x" onclick="removeTag('${ctx}',${i})" title="Remove">×</button>`;
+      wrap.insertBefore(tag, input);
+    });
+  }
+
+  function clearTagState(ctx) {
+    tagState[ctx] = [];
+    renderTags(ctx);
+  }
+
+  // ── RENDER ────────────────────────────────────
+  function renderAll() {
+    renderSummary();
+    renderManagerBreakdown();
+    renderTable();
+    renderManagerSuggestions();
+  }
+
+  function renderSummary() {
+    const active = entries.filter(e => !e.voided);
+    const totalAmount   = active.reduce((s, e) => s + e.amount, 0);
+    const totalVouchers = active.reduce((s, e) => s + e.voucherCount, 0);
+    const voidedCount   = entries.filter(e => e.voided).length;
+    const voidedAmount  = entries.filter(e => e.voided).reduce((s, e) => s + e.amount, 0);
+    const avg = active.length ? totalAmount / active.length : 0;
+
+    document.getElementById('stat-total').textContent     = '$' + totalAmount.toFixed(2);
+    document.getElementById('stat-vouchers').textContent  = totalVouchers;
+    document.getElementById('stat-entries').textContent   = entries.length;
+    document.getElementById('stat-voided-count').textContent = voidedCount + ' voided';
+    document.getElementById('stat-avg').textContent       = '$' + avg.toFixed(2);
+    document.getElementById('entry-count-header').textContent = entries.length + ' entries logged';
+    document.getElementById('stat-voided-note').textContent =
+      voidedCount > 0 ? `(${voidedCount} voided, $${voidedAmount.toFixed(2)})` : '';
+  }
+
+  function renderManagerBreakdown() {
+    const active = entries.filter(e => !e.voided);
+    const byManager = {};
+    active.forEach(e => {
+      if (!byManager[e.manager]) byManager[e.manager] = { amount: 0, vouchers: 0, count: 0 };
+      byManager[e.manager].amount   += e.amount;
+      byManager[e.manager].vouchers += e.voucherCount;
+      byManager[e.manager].count++;
+    });
+
+    const container = document.getElementById('manager-list');
+    const names = Object.keys(byManager).sort((a, b) => byManager[b].amount - byManager[a].amount);
+
+    if (!names.length) {
+      container.innerHTML = '<span class="no-data">No active entries yet.</span>';
+      return;
+    }
+
+    container.innerHTML = names.map(name => {
+      const m = byManager[name];
+      return `<div class="manager-row">
+        <span class="manager-name">${esc(name)}</span>
+        <span class="manager-stats">
+          <span>$${m.amount.toFixed(2)}</span> &mdash; ${m.vouchers} vouchers &mdash; ${m.count} entries
+        </span>
+      </div>`;
+    }).join('');
+  }
+
+  function renderTable() {
+    const showVoided   = document.getElementById('show-voided').checked;
+    const filterMgr    = document.getElementById('filter-manager').value.trim().toLowerCase();
+
+    let filtered = entries.filter(e => {
+      if (!showVoided && e.voided) return false;
+      if (filterMgr && !e.manager.toLowerCase().includes(filterMgr)) return false;
+      return true;
+    });
+
+    const tbody     = document.getElementById('ledger-body');
+    const emptyState = document.getElementById('empty-state');
+
+    if (!filtered.length) {
+      tbody.innerHTML = '';
+      emptyState.style.display = 'block';
+      return;
+    }
+
+    emptyState.style.display = 'none';
+    tbody.innerHTML = filtered.map(e => {
+      const dt      = new Date(e.createdAt);
+      const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const serialsHtml = e.serials && e.serials.length
+        ? `<div class="serial-pills">${e.serials.map(s => `<span class="serial-pill">${esc(s)}</span>`).join('')}</div>`
+        : '<span style="color:var(--cream-dim)">—</span>';
+
+      return `<tr class="${e.voided ? 'voided' : ''}">
+        <td>${dateStr}<br><small style="color:var(--cream-dim)">${timeStr}</small></td>
+        <td>${serialsHtml}</td>
+        <td>${esc(e.checkNumber)}</td>
+        <td>${e.voucherCount}</td>
+        <td class="amount">$${e.amount.toFixed(2)}</td>
+        <td>${esc(e.manager)}</td>
+        <td>${e.voided ? '<span class="void-badge">Voided</span>' : '—'}</td>
+        <td><div class="action-cell">
+          ${!e.voided ? `<button class="btn-sm btn-edit" onclick="openEdit('${e.id}')">Edit</button>` : ''}
+          ${e.voided
+            ? `<button class="btn-sm btn-restore" onclick="toggleVoid('${e.id}')">Restore</button>`
+            : `<button class="btn-sm btn-void" onclick="toggleVoid('${e.id}')">Void</button>`}
+        </div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderManagerSuggestions() {
+    const names = [...new Set(entries.map(e => e.manager))].filter(Boolean).sort();
+    document.getElementById('manager-suggestions').innerHTML =
+      names.map(n => `<option value="${esc(n)}">`).join('');
+  }
+
+  // ── ENTRY CRUD ────────────────────────────────
+  async function submitEntry() {
+    const serialInput = document.getElementById('f-serial-input');
+    if (serialInput.value.trim()) commitTag('form', serialInput.value.trim(), serialInput);
+
+    const serials      = tagState['form'];
+    const checkNumber  = val('f-check');
+    const voucherCount = parseInt(val('f-count'));
+    const amount       = parseFloat(val('f-amount'));
+    const manager      = val('f-manager');
+
+    if (!serials.length) return toast('At least one serial number is required.', true);
+    if (!checkNumber) return toast('Check number is required.', true);
+    if (!voucherCount || voucherCount < 1) return toast('Enter a valid voucher count.', true);
+    if (isNaN(amount) || amount < 0) return toast('Enter a valid amount.', true);
+    if (!manager) return toast('Manager name is required.', true);
+
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    try {
+      const entry = await api('POST', '/entries', { serials, checkNumber, voucherCount, amount, manager });
+      entries.unshift(entry);
+      clearForm();
+      renderAll();
+      toast(`Entry logged with ${serials.length} serial${serials.length > 1 ? 's' : ''}.`);
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function clearForm() {
+    ['f-check','f-count','f-amount','f-manager'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    clearTagState('form');
+    document.getElementById('f-serial-input').focus();
+  }
+
+  async function toggleVoid(id) {
+    try {
+      const updated = await api('PATCH', `/entries/${id}/void`);
+      const idx = entries.findIndex(e => e.id === id);
+      if (idx !== -1) entries[idx] = updated;
+      renderAll();
+      toast(updated.voided ? 'Entry voided.' : 'Entry restored.');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  // ── EDIT MODAL ────────────────────────────────
+  function openEdit(id) {
+    const e = entries.find(x => x.id === id);
+    if (!e) return;
+    editingId = id;
+    tagState['edit'] = [...(e.serials || [])];
+    renderTags('edit');
+    document.getElementById('e-check').value   = e.checkNumber;
+    document.getElementById('e-count').value   = e.voucherCount;
+    document.getElementById('e-amount').value  = e.amount;
+    document.getElementById('e-manager').value = e.manager;
+    document.getElementById('edit-modal').classList.add('open');
+    setTimeout(() => document.getElementById('e-serial-input').focus(), 50);
+  }
+
+  function closeModal() {
+    document.getElementById('edit-modal').classList.remove('open');
+    editingId = null;
+    clearTagState('edit');
+  }
+
+  async function saveEdit() {
+    if (!editingId) return;
+    const serialInput = document.getElementById('e-serial-input');
+    if (serialInput.value.trim()) commitTag('edit', serialInput.value.trim(), serialInput);
+
+    const serials      = tagState['edit'];
+    const checkNumber  = document.getElementById('e-check').value.trim();
+    const voucherCount = parseInt(document.getElementById('e-count').value);
+    const amount       = parseFloat(document.getElementById('e-amount').value);
+    const manager      = document.getElementById('e-manager').value.trim();
+
+    if (!serials.length) return toast('At least one serial number is required.', true);
+    if (!checkNumber || !voucherCount || isNaN(amount) || !manager)
+      return toast('All fields are required.', true);
+
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    try {
+      const updated = await api('PUT', `/entries/${editingId}`, { serials, checkNumber, voucherCount, amount, manager });
+      const idx = entries.findIndex(e => e.id === editingId);
+      if (idx !== -1) entries[idx] = updated;
+      closeModal();
+      renderAll();
+      toast('Entry updated.');
+    } catch (err) {
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── CSV EXPORT ────────────────────────────────
+  function exportCSV() {
+    const showVoided = document.getElementById('show-voided').checked;
+    const toExport = showVoided ? entries : entries.filter(e => !e.voided);
+
+    const rows = [
+      ['Date', 'Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Manager', 'Status'],
+      ...toExport.map(e => {
+        const dt = new Date(e.createdAt);
+        return [
+          dt.toLocaleDateString('en-US'),
+          dt.toLocaleTimeString('en-US'),
+          (e.serials || []).join('; '),
+          e.checkNumber,
+          e.voucherCount,
+          e.amount.toFixed(2),
+          e.manager,
+          e.voided ? 'Voided' : 'Active'
+        ];
+      })
+    ];
+
+    const csv  = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `harborbucks-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('CSV exported.');
+  }
+
+  // ── HELPERS ───────────────────────────────────
+  function val(id) { return document.getElementById(id).value.trim(); }
+
+  function esc(str) {
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  let toastTimer;
+  function toast(msg, isError = false) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast show' + (isError ? ' error' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  }
+
+  // ── START ─────────────────────────────────────
+  init();
+</script>
+</body>
+</html>

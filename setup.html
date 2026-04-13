@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harborbucks — Create Account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0c1a2e; --navy-mid: #132238; --navy-light: #1a3050;
+    --brass: #c49a3c; --brass-light: #e0b84a; --brass-dim: #8a6a20;
+    --cream: #f0e8d8; --cream-dim: #b8ad99;
+    --red: #c0392b; --rule: rgba(196,154,60,0.25);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--navy);
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(196,154,60,0.06) 39px, rgba(196,154,60,0.06) 40px);
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 24px;
+  }
+  .brand { text-align: center; margin-bottom: 36px; }
+  .brand h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.6rem; font-weight: 900;
+    color: var(--brass-light); letter-spacing: 0.04em; line-height: 1;
+  }
+  .brand p { font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass-dim); margin-top: 6px; }
+  .card {
+    background: var(--navy-mid);
+    border: 1px solid var(--rule); border-top: 3px solid var(--brass);
+    padding: 36px 40px; width: 100%; max-width: 400px;
+  }
+  .card-title { font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--brass); border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 6px; }
+  .card-sub { font-size: 0.72rem; color: var(--cream-dim); margin-bottom: 24px; line-height: 1.6; }
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  label { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--brass-dim); }
+  input {
+    background: var(--navy-light); border: 1px solid var(--rule); border-bottom: 2px solid var(--brass-dim);
+    color: var(--cream); font-family: 'IBM Plex Mono', monospace; font-size: 0.92rem;
+    padding: 10px 12px; outline: none; transition: border-color 0.15s, background 0.15s; width: 100%;
+  }
+  input::placeholder { color: rgba(176,166,148,0.35); }
+  input:focus { border-bottom-color: var(--brass-light); background: rgba(26,48,80,0.8); }
+  .strength {
+    height: 3px; background: var(--navy-light); margin-top: 4px;
+    position: relative; overflow: hidden;
+  }
+  .strength-bar { height: 100%; width: 0; transition: width 0.2s, background 0.2s; }
+  .strength-label { font-size: 0.6rem; color: var(--cream-dim); margin-top: 3px; }
+  .btn {
+    width: 100%; margin-top: 8px;
+    background: var(--brass); color: var(--navy); border: none;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; padding: 13px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn:hover:not(:disabled) { background: var(--brass-light); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .error { font-size: 0.75rem; color: #e08080; background: rgba(192,57,43,0.12); border-left: 3px solid var(--red); padding: 10px 12px; margin-bottom: 16px; display: none; }
+  .error.show { display: block; }
+  .note { font-size: 0.68rem; color: var(--cream-dim); margin-top: 16px; line-height: 1.5; }
+  .note strong { color: var(--brass); }
+</style>
+</head>
+<body>
+
+<div class="brand">
+  <h1>⚓ Harborbucks</h1>
+  <p>Voucher Ledger &mdash; Internal Use Only</p>
+</div>
+
+<div class="card">
+  <div class="card-title">Create Admin Account</div>
+  <div class="card-sub">First-time setup. You'll configure MFA on the next step.</div>
+
+  <div class="error" id="err"></div>
+
+  <div class="field">
+    <label for="username">Username</label>
+    <input id="username" type="text" placeholder="admin" autocomplete="username" autofocus>
+  </div>
+  <div class="field">
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="••••••••" autocomplete="new-password" oninput="checkStrength()">
+    <div class="strength"><div class="strength-bar" id="strength-bar"></div></div>
+    <div class="strength-label" id="strength-label"></div>
+  </div>
+  <div class="field">
+    <label for="confirm">Confirm Password</label>
+    <input id="confirm" type="password" placeholder="••••••••" autocomplete="new-password">
+  </div>
+
+  <button class="btn" id="btn" onclick="setup()">Create Account →</button>
+  <div class="note">After creating your account, you'll be asked to set up an <strong>authenticator app</strong> for MFA.</div>
+</div>
+
+<script>
+  function checkStrength() {
+    const pw  = document.getElementById('password').value;
+    const bar = document.getElementById('strength-bar');
+    const lbl = document.getElementById('strength-label');
+    let score = 0;
+    if (pw.length >= 8)  score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    const labels = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very strong'];
+    const colors = ['', '#c0392b', '#e67e22', '#c49a3c', '#2e7d52', '#3da66e'];
+    bar.style.width  = (score / 5 * 100) + '%';
+    bar.style.background = colors[score] || 'transparent';
+    lbl.textContent  = score > 0 ? labels[score] : '';
+  }
+
+  async function setup() {
+    const username       = document.getElementById('username').value.trim();
+    const password       = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirm').value;
+    const btn = document.getElementById('btn');
+
+    if (!username || !password) return showErr('Username and password are required.');
+    if (password !== confirmPassword) return showErr('Passwords do not match.');
+    if (password.length < 8) return showErr('Password must be at least 8 characters.');
+
+    btn.disabled = true;
+    btn.textContent = 'Creating account…';
+
+    try {
+      const res  = await fetch('/auth/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, confirmPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) return showErr(data.error || 'Setup failed.');
+      // Auto-login after setup
+      const loginRes  = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const loginData = await loginRes.json();
+      window.location.href = loginData.redirect || '/login';
+    } catch (e) {
+      showErr('Network error. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Create Account →';
+    }
+  }
+
+  function showErr(msg) {
+    const el = document.getElementById('err');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+</script>
+</body>
+</html>

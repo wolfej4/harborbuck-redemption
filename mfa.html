@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harborbucks — Two-Factor Auth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0c1a2e; --navy-mid: #132238; --navy-light: #1a3050;
+    --brass: #c49a3c; --brass-light: #e0b84a; --brass-dim: #8a6a20;
+    --cream: #f0e8d8; --cream-dim: #b8ad99;
+    --red: #c0392b; --rule: rgba(196,154,60,0.25);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--navy);
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(196,154,60,0.06) 39px, rgba(196,154,60,0.06) 40px);
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'IBM Plex Mono', monospace; padding: 24px;
+  }
+  .brand { text-align: center; margin-bottom: 36px; }
+  .brand h1 { font-family: 'Playfair Display', serif; font-size: 2.6rem; font-weight: 900; color: var(--brass-light); letter-spacing: 0.04em; line-height: 1; }
+  .brand p { font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass-dim); margin-top: 6px; }
+  .card {
+    background: var(--navy-mid);
+    border: 1px solid var(--rule); border-top: 3px solid var(--brass);
+    padding: 36px 40px; width: 100%; max-width: 360px;
+    text-align: center;
+  }
+  .card-title { font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--brass); border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 8px; }
+  .card-sub { font-size: 0.72rem; color: var(--cream-dim); margin-bottom: 28px; line-height: 1.6; }
+  .icon { font-size: 2.4rem; margin-bottom: 4px; opacity: 0.7; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; text-align: left; }
+  label { font-size: 0.62rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--brass-dim); }
+  input {
+    background: var(--navy-light); border: 1px solid var(--rule); border-bottom: 2px solid var(--brass-dim);
+    color: var(--cream); font-family: 'IBM Plex Mono', monospace;
+    font-size: 2rem; font-weight: 500;
+    padding: 14px 12px; outline: none; transition: border-color 0.15s; width: 100%;
+    letter-spacing: 0.4em; text-align: center;
+  }
+  input:focus { border-bottom-color: var(--brass-light); }
+  input::placeholder { font-size: 1.2rem; letter-spacing: 0.2em; color: rgba(176,166,148,0.3); }
+
+  .btn {
+    width: 100%; background: var(--brass); color: var(--navy); border: none;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; padding: 13px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn:hover:not(:disabled) { background: var(--brass-light); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .error { font-size: 0.75rem; color: #e08080; background: rgba(192,57,43,0.12); border-left: 3px solid var(--red); padding: 10px 12px; margin-bottom: 16px; text-align: left; display: none; }
+  .error.show { display: block; }
+
+  .back-link { margin-top: 20px; font-size: 0.68rem; color: var(--cream-dim); }
+  .back-link a { color: var(--brass-dim); text-decoration: none; }
+  .back-link a:hover { color: var(--brass); }
+
+  /* shake animation on wrong code */
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%,60% { transform: translateX(-6px); }
+    40%,80% { transform: translateX(6px); }
+  }
+  .shake { animation: shake 0.35s ease; }
+</style>
+</head>
+<body>
+
+<div class="brand">
+  <h1>⚓ Harborbucks</h1>
+  <p>Voucher Ledger &mdash; Internal Use Only</p>
+</div>
+
+<div class="card">
+  <div class="card-title">Two-Factor Authentication</div>
+  <div class="card-sub">Enter the 6-digit code from your authenticator app.</div>
+
+  <div class="error" id="err"></div>
+
+  <div class="field">
+    <label for="token">Authentication Code</label>
+    <input id="token" type="text" inputmode="numeric" pattern="[0-9]*"
+      maxlength="6" placeholder="000000" autocomplete="one-time-code" autofocus>
+  </div>
+
+  <button class="btn" id="btn" onclick="verify()">Verify</button>
+
+  <div class="back-link"><a href="/login">← Back to login</a></div>
+</div>
+
+<script>
+  const tokenInput = document.getElementById('token');
+
+  tokenInput.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+    if (e.target.value.length === 6) verify();
+  });
+
+  tokenInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') verify();
+  });
+
+  async function verify() {
+    const token = tokenInput.value.trim();
+    const btn   = document.getElementById('btn');
+    if (token.length !== 6) return showErr('Enter the full 6-digit code.');
+
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+    document.getElementById('err').classList.remove('show');
+
+    try {
+      const res  = await fetch('/auth/mfa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        tokenInput.value = '';
+        tokenInput.focus();
+        tokenInput.classList.add('shake');
+        tokenInput.addEventListener('animationend', () => tokenInput.classList.remove('shake'), { once: true });
+        return showErr(data.error || 'Verification failed.');
+      }
+      window.location.href = data.redirect;
+    } catch (e) {
+      showErr('Network error. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Verify';
+    }
+  }
+
+  function showErr(msg) {
+    const el = document.getElementById('err');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+</script>
+</body>
+</html>
