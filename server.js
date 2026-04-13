@@ -513,6 +513,20 @@ app.post('/api/me/update', requireAuth, async (req, res) => {
     }
   }
 
+  if (field === 'initials') {
+    const initials = value?.trim().toUpperCase();
+    if (!initials || !/^[A-Za-z0-9]{2,4}$/.test(initials))
+      return res.status(400).json({ error: 'Initials must be 2–4 letters or numbers.' });
+    try {
+      db.prepare('UPDATE users SET initials=? WHERE id=?').run(initials, user.id);
+      log('info', 'account.initials_updated', { user: user.username, initials });
+      return res.json({ ok: true, initials });
+    } catch(e) {
+      if (e.message?.includes('UNIQUE')) return res.status(400).json({ error: 'Those initials are already taken.' });
+      return res.status(500).json({ error: 'Failed to update initials.' });
+    }
+  }
+
   if (field === 'password') {
     if (!currentPassword) return res.status(400).json({ error: 'Current password required.' });
     if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });

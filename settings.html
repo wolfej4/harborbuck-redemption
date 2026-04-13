@@ -148,6 +148,25 @@ input[readonly] { opacity: .55; cursor: not-allowed; border-bottom-style: dashed
     </div>
   </div>
 
+  <!-- INITIALS -->
+  <div class="settings-section">
+    <div class="section-title">Manager Initials</div>
+    <div class="msg" id="initials-msg"></div>
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;align-items:flex-end">
+      <div class="field" style="margin-bottom:0">
+        <label>Initials</label>
+        <input id="initials-input" type="text" maxlength="4"
+          placeholder="e.g. JW"
+          style="text-transform:uppercase;letter-spacing:.2em;font-size:1.1rem"
+          autocomplete="off">
+        <div class="hint">2–4 letters or numbers. Must be unique across all users.</div>
+      </div>
+      <div style="padding-bottom:22px">
+        <button class="btn btn-primary" onclick="saveInitials()">Save Initials</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PASSWORD -->
   <div class="settings-section">
     <div class="section-title">Change Password</div>
@@ -228,7 +247,8 @@ async function init() {
 
     if (me.role === 'admin') document.getElementById('admin-link').style.display = 'inline';
 
-    document.getElementById('email-input').value = me.email || '';
+    document.getElementById('initials-input').value = me.initials || '';
+    document.getElementById('email-input').value    = me.email || '';
 
     if (smtpConfigured && me.email) document.getElementById('opt-email').style.display = 'flex';
 
@@ -284,7 +304,27 @@ async function saveEmail() {
   } catch(e) { showMsg('email-msg', 'Network error.', 'error'); }
 }
 
-// ── CHANGE PASSWORD ───────────────────────────
+// ── SAVE INITIALS ─────────────────────────────
+async function saveInitials() {
+  const value = document.getElementById('initials-input').value.trim().toUpperCase();
+  if (!value) return showMsg('initials-msg', 'Enter your initials.', 'error');
+  if (!/^[A-Za-z0-9]{2,4}$/.test(value))
+    return showMsg('initials-msg', 'Initials must be 2–4 letters or numbers, no symbols.', 'error');
+
+  try {
+    const res = await fetch('/api/me/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: 'initials', value }),
+    });
+    const d = await res.json();
+    if (!res.ok) return showMsg('initials-msg', d.error || 'Failed to save.', 'error');
+    currentUser.initials = d.initials;
+    document.getElementById('initials-input').value = d.initials;
+    document.getElementById('initials-msg').classList.remove('show');
+    toast('Initials updated.', 'success');
+  } catch(e) { showMsg('initials-msg', 'Network error.', 'error'); }
+}
 async function changePassword() {
   const currentPassword  = document.getElementById('pw-current').value;
   const newPassword      = document.getElementById('pw-new').value;
