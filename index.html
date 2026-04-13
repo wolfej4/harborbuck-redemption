@@ -490,6 +490,7 @@
             onkeydown="handleSerialKey(event,'form')" oninput="handleSerialInput(event,'form')">
         </div>
         <div class="tag-hint">Press Enter, Tab, or Space after each serial number</div>
+        <div id="serial-dupe-warn" style="display:none;margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;padding:8px 12px;background:rgba(230,126,34,.1);border-left:3px solid #e67e22;color:#e89850;line-height:1.6"></div>
       </div>
       <div class="field-group">
         <label for="f-check">Check Number</label>
@@ -684,13 +685,40 @@
     const clean = value.trim();
     if (!clean) return;
     if (tagState[ctx].includes(clean)) {
-      toast('Duplicate serial: ' + clean, true);
+      toast('Already added: ' + clean, true);
       if (input) input.value = '';
       return;
     }
     tagState[ctx].push(clean);
     if (input) input.value = '';
     renderTags(ctx);
+    if (ctx === 'form') checkDuplicateSerials();
+  }
+
+  function checkDuplicateSerials() {
+    const warn = document.getElementById('serial-dupe-warn');
+    if (!warn) return;
+    const current = tagState['form'];
+    if (!current.length) { warn.style.display = 'none'; return; }
+
+    const matches = [];
+    for (const serial of current) {
+      const hits = entries.filter(e =>
+        !e.voided && e.serials && e.serials.includes(serial)
+      );
+      for (const hit of hits) {
+        const dt = new Date(hit.createdAt);
+        const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        matches.push(`⚠ <strong>${serial}</strong> was previously logged on ${dateStr} — Check #${hit.checkNumber}, ${hit.manager}`);
+      }
+    }
+
+    if (!matches.length) {
+      warn.style.display = 'none';
+    } else {
+      warn.innerHTML = matches.join('<br>');
+      warn.style.display = 'block';
+    }
   }
 
   function removeTag(ctx, index) {
@@ -854,6 +882,8 @@
   function clearForm() {
     ['f-check','f-count','f-amount'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('f-manager').value = myInitials;
+    const warn = document.getElementById('serial-dupe-warn');
+    if (warn) warn.style.display = 'none';
     clearTagState('form');
     document.getElementById('f-serial-input').focus();
   }
