@@ -664,14 +664,15 @@ app.post('/api/admin/settings', requireAdmin, (req, res) => {
 });
 
 app.post('/api/admin/settings/test-smtp', requireAdmin, async (req, res) => {
-  const u = db.prepare('SELECT email,username FROM users WHERE id=?').get(req.session.userId);
-  if (!u?.email) return res.status(400).json({ error: 'Your account has no email address to send the test to.' });
+  const { email } = req.body;
+  if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid recipient email address is required.' });
+  const u = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId);
   try {
-    await sendEmail({ to: u.email, subject: 'Harborbucks — SMTP Test', text: 'SMTP is working correctly.', html: '<p>SMTP is working correctly.</p>' });
-    log('info', 'admin.smtp.test_ok', { admin: u.username, to: u.email });
+    await sendEmail({ to: email, subject: 'Harborbucks — SMTP Test', text: 'SMTP is working correctly.', html: '<p>SMTP is working correctly.</p>' });
+    log('info', 'admin.smtp.test_ok', { admin: u?.username, to: email });
     res.json({ ok: true });
   } catch(e) {
-    log('error', 'admin.smtp.test_fail', { admin: u.username, msg: e.message });
+    log('error', 'admin.smtp.test_fail', { admin: u?.username, msg: e.message });
     res.status(500).json({ error: e.message });
   }
 });

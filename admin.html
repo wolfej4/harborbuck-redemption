@@ -202,7 +202,20 @@ select option{background:var(--navy-mid)}
 
       <div class="form-actions">
         <button class="btn btn-primary" onclick="saveSMTP()">Save SMTP</button>
-        <button class="btn btn-ghost" onclick="testSMTP()">Send Test Email</button>
+      </div>
+
+      <div style="border-top:1px solid var(--rule);margin-top:20px;padding-top:20px">
+        <div class="section-title" style="margin-bottom:14px">Send Test Email</div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:flex-end">
+          <div class="field" style="margin-bottom:0">
+            <label>Recipient Address</label>
+            <input id="smtp-test-email" type="email" placeholder="you@example.com" autocomplete="off">
+          </div>
+          <button class="btn btn-ghost" style="white-space:nowrap" onclick="testSMTP()">Send Test</button>
+        </div>
+        <div class="hint" style="margin-top:6px">Sends a test message using the settings above. Save first if you've made changes.</div>
+        <div id="smtp-test-result" style="display:none;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid"></div>
+      </div>
       </div>
     </div>
   </div>
@@ -488,12 +501,29 @@ async function saveSMTP(){
 }
 
 async function testSMTP(){
+  const email = document.getElementById('smtp-test-email').value.trim();
+  const result = document.getElementById('smtp-test-result');
+  if(!email) {
+    result.textContent = 'Enter a recipient address first.';
+    result.style.cssText = 'display:block;margin-top:10px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid var(--red);color:#e08080;background:rgba(192,57,43,.1)';
+    return;
+  }
+  result.textContent = 'Sending…';
+  result.style.cssText = 'display:block;margin-top:10px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid var(--brass-dim);color:var(--cream-dim);background:transparent';
   try{
-    const res=await fetch('/api/admin/settings/test-smtp',{method:'POST'});
+    const res=await fetch('/api/admin/settings/test-smtp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email})});
     const d=await res.json();
-    if(!res.ok) return toast('SMTP test failed: '+d.error,'error');
-    toast('Test email sent to your address.','success');
-  }catch(e){ toast('Network error.','error'); }
+    if(!res.ok){
+      result.textContent = '✗ ' + (d.error||'Send failed.');
+      result.style.cssText = 'display:block;margin-top:10px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid var(--red);color:#e08080;background:rgba(192,57,43,.1)';
+    } else {
+      result.textContent = '✓ Test email sent to ' + email;
+      result.style.cssText = 'display:block;margin-top:10px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid #3da66e;color:#80d4aa;background:rgba(46,125,82,.08)';
+    }
+  }catch(e){
+    result.textContent = '✗ Network error.';
+    result.style.cssText = 'display:block;margin-top:10px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid var(--red);color:#e08080;background:rgba(192,57,43,.1)';
+  }
 }
 
 // ── HELPERS ───────────────────────────────────
