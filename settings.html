@@ -88,14 +88,14 @@ header {
 }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 label { font-family: 'IBM Plex Mono', monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; color: var(--brass-dim); }
-input, select {
+input:not([type="radio"]):not([type="checkbox"]), select {
   background: var(--navy-light); border: 1px solid var(--rule);
   border-bottom: 2px solid var(--brass-dim); color: var(--cream);
   font-family: 'IBM Plex Mono', monospace; font-size: .9rem;
   padding: 10px 12px; outline: none; transition: border-color .15s, background .15s; width: 100%;
 }
-input::placeholder { color: rgba(176,166,148,.35); }
-input:focus, select:focus { border-bottom-color: var(--brass-light); background: rgba(26,48,80,.8); }
+input:not([type="radio"]):not([type="checkbox"])::placeholder { color: rgba(176,166,148,.35); }
+input:not([type="radio"]):not([type="checkbox"]):focus, select:focus { border-bottom-color: var(--brass-light); background: rgba(26,48,80,.8); }
 select option { background: var(--navy-mid); }
 input[readonly] { opacity: .55; cursor: not-allowed; border-bottom-style: dashed; }
 
@@ -255,35 +255,51 @@ let currentUser = null;
 let smtpConfigured = false;
 
 async function init() {
-  const [me, cfg] = await Promise.all([
-    fetch('/api/me').then(r => r.json()),
-    fetch('/api/public-config').then(r => r.json()),
-  ]);
-  currentUser = me;
-  smtpConfigured = cfg.smtpConfigured;
+  try {
+    const [me, cfg] = await Promise.all([
+      fetch('/api/me').then(r => r.json()),
+      fetch('/api/public-config').then(r => r.json()),
+    ]);
 
-  // Profile card
-  document.getElementById('avatar').textContent = me.initials;
-  document.getElementById('profile-name').textContent = me.username;
-  document.getElementById('page-sub').textContent = `Signed in as ${me.username} (${me.initials})`;
-  document.getElementById('profile-initials-badge').innerHTML = `<span class="badge" style="color:var(--brass-light);background:rgba(196,154,60,.12);border-color:rgba(196,154,60,.3)">${me.initials}</span>`;
-  document.getElementById('profile-role-badge').innerHTML = `<span class="badge badge-${me.role}">${me.role}</span>`;
-  document.getElementById('profile-mfa-badge').innerHTML = `<span class="badge badge-mfa-${me.mfa_type}">MFA: ${me.mfa_type}</span>`;
+    if (me.error) throw new Error(me.error);
 
-  // Show admin link
-  if (me.role === 'admin') document.getElementById('admin-link').style.display = 'inline';
+    currentUser    = me;
+    smtpConfigured = cfg.smtpConfigured;
 
-  // Email
-  document.getElementById('email-input').value = me.email || '';
+    const initials = me.initials || me.username?.slice(0,2).toUpperCase() || '?';
 
-  // MFA options
-  if (smtpConfigured && me.email) document.getElementById('opt-email').style.display = 'flex';
-  const radios = document.querySelectorAll('input[name="mfa"]');
-  radios.forEach(r => {
-    r.checked = r.value === me.mfa_type;
-    r.closest('.mfa-option').classList.toggle('selected', r.checked);
-  });
-  updateMfaNote();
+    // Profile card
+    document.getElementById('avatar').textContent          = initials;
+    document.getElementById('profile-name').textContent    = me.username || '—';
+    document.getElementById('page-sub').textContent        = `Signed in as ${me.username} (${initials})`;
+    document.getElementById('profile-initials-badge').innerHTML =
+      `<span class="badge" style="color:var(--brass-light);background:rgba(196,154,60,.12);border-color:rgba(196,154,60,.3)">${initials}</span>`;
+    document.getElementById('profile-role-badge').innerHTML =
+      `<span class="badge badge-${me.role}">${me.role}</span>`;
+    document.getElementById('profile-mfa-badge').innerHTML =
+      `<span class="badge badge-mfa-${me.mfa_type}">MFA: ${me.mfa_type}</span>`;
+
+    // Show admin link
+    if (me.role === 'admin') document.getElementById('admin-link').style.display = 'inline';
+
+    // Email
+    document.getElementById('email-input').value = me.email || '';
+
+    // MFA options — show email option only if SMTP is on and user has an email
+    if (smtpConfigured && me.email) document.getElementById('opt-email').style.display = 'flex';
+
+    document.querySelectorAll('input[name="mfa"]').forEach(r => {
+      r.checked = r.value === me.mfa_type;
+      r.closest('.mfa-option').classList.toggle('selected', r.checked);
+    });
+    updateMfaNote();
+
+  } catch(e) {
+    document.getElementById('page-sub').textContent = 'Failed to load account info.';
+    document.getElementById('avatar').textContent   = '!';
+    document.getElementById('avatar').style.background = 'var(--red-dim)';
+    console.error('Settings init error:', e);
+  }
 }
 
 function mfaSelectionChanged() {
