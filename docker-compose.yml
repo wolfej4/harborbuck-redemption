@@ -11,6 +11,6 @@ services:
       - /opt/appdata/harborbucks:/data
     environment:
       - DB_PATH=/data/harborbucks.db
+      - LOG_PATH=/data/harborbucks.log
       - PORT=3000
-      # Set to "true" if your reverse proxy terminates HTTPS
       - SECURE_COOKIES=false

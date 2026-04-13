@@ -1,6 +1,6 @@
 {
   "name": "harborbucks",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "Harborbucks voucher ledger",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
@@ -9,6 +9,7 @@
     "better-sqlite3":  "^9.4.3",
     "express":         "^4.18.3",
     "express-session": "^1.18.0",
+    "morgan":          "^1.10.0",
     "nodemailer":      "^6.9.9",
     "otplib":          "^12.0.1",
     "qrcode":          "^1.5.3"

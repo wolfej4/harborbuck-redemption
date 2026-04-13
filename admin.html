@@ -1,6 +1,7 @@
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Harborbucks — Admin</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -106,6 +107,7 @@ select option{background:var(--navy-mid)}
   <div class="tabs">
     <div class="tab active" onclick="switchTab('users')">Users</div>
     <div class="tab" onclick="switchTab('settings')">Settings</div>
+    <div class="tab" onclick="switchTab('logs')">Logs</div>
   </div>
 
   <!-- USERS PANEL -->
@@ -179,6 +181,43 @@ select option{background:var(--navy-mid)}
       </div>
     </div>
   </div>
+
+  <!-- LOGS PANEL -->
+  <div class="panel" id="panel-logs">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div class="section-title" style="margin:0;border:0;padding:0">Application Logs</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="log-level" onchange="loadLogs()" style="background:var(--navy-mid);border:1px solid var(--rule);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:6px 10px;outline:none;width:auto">
+          <option value="">All levels</option>
+          <option value="info">Info</option>
+          <option value="warn">Warn</option>
+          <option value="error">Error</option>
+        </select>
+        <input id="log-search" type="text" placeholder="Search…" oninput="debouncedSearch()"
+          style="background:var(--navy-mid);border:1px solid var(--rule);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:6px 10px;outline:none;width:180px">
+        <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--cream-dim);cursor:pointer;user-select:none">
+          <input type="checkbox" id="log-autorefresh" onchange="toggleAutoRefresh()" style="accent-color:var(--brass)"> Auto-refresh
+        </label>
+        <button class="btn btn-ghost" style="padding:6px 14px;font-size:.68rem" onclick="loadLogs()">↺ Refresh</button>
+        <a href="/api/admin/logs/download" style="font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;padding:6px 14px;color:var(--brass);border:1px solid var(--brass-dim);text-decoration:none" onmouseover="this.style.background='rgba(196,154,60,.1)'" onmouseout="this.style.background='transparent'">↓ Download</a>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="min-width:860px">
+        <thead>
+          <tr>
+            <th style="width:155px">Timestamp</th>
+            <th style="width:60px">Level</th>
+            <th style="width:210px">Event</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody"><tr><td colspan="4" class="no-data">Switch to this tab to load logs.</td></tr></tbody>
+      </table>
+    </div>
+    <div id="log-count" style="font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--cream-dim);margin-top:10px;text-align:right"></div>
+  </div>
+
 </div>
 
 <!-- RESET PASSWORD MODAL -->
@@ -217,9 +256,80 @@ async function init(){
 
 // ── TABS ──────────────────────────────────────
 function switchTab(t){
-  document.querySelectorAll('.tab').forEach((el,i)=>{ el.classList.toggle('active',['users','settings'][i]===t); });
+  document.querySelectorAll('.tab').forEach((el,i)=>{ el.classList.toggle('active',['users','settings','logs'][i]===t); });
   document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
   document.getElementById(`panel-${t}`).classList.add('active');
+  if(t==='logs') loadLogs();
+}
+
+// ── LOGS ──────────────────────────────────────
+let autoRefreshTimer=null;
+let searchTimer=null;
+
+function debouncedSearch(){
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(loadLogs,350);
+}
+
+function toggleAutoRefresh(){
+  const on=document.getElementById('log-autorefresh').checked;
+  clearInterval(autoRefreshTimer);
+  if(on){ loadLogs(); autoRefreshTimer=setInterval(loadLogs,15000); }
+}
+
+async function loadLogs(){
+  const level=document.getElementById('log-level').value;
+  const search=document.getElementById('log-search').value.trim();
+  const params=new URLSearchParams({ limit:500 });
+  if(level)  params.set('level',level);
+  if(search) params.set('search',search);
+
+  try{
+    const res=await fetch('/api/admin/logs?'+params);
+    const logs=await res.json();
+    if(!res.ok){ document.getElementById('log-tbody').innerHTML=`<tr><td colspan="4" class="no-data" style="color:#e08080">${logs.error||'Failed to load.'}</td></tr>`; return; }
+    renderLogs(logs);
+  }catch(e){
+    document.getElementById('log-tbody').innerHTML='<tr><td colspan="4" class="no-data" style="color:#e08080">Network error.</td></tr>';
+  }
+}
+
+function renderLogs(logs){
+  const tbody=document.getElementById('log-tbody');
+  document.getElementById('log-count').textContent=logs.length?`Showing ${logs.length} entries (newest first)`:'';
+
+  if(!logs.length){
+    tbody.innerHTML='<tr><td colspan="4" class="no-data">No log entries found.</td></tr>';
+    return;
+  }
+
+  const levelColour={
+    info:  {bg:'rgba(196,154,60,.08)',  color:'var(--brass)',    border:'rgba(196,154,60,.25)'},
+    warn:  {bg:'rgba(230,126,34,.10)',  color:'#e89850',         border:'rgba(230,126,34,.3)'},
+    error: {bg:'rgba(192,57,43,.12)',   color:'#e08080',         border:'rgba(192,57,43,.3)'},
+  };
+
+  tbody.innerHTML=logs.map(e=>{
+    const dt=new Date(e.ts);
+    const dateStr=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const timeStr=dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const lc=levelColour[e.level]||levelColour.info;
+    const badge=`<span style="font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;background:${lc.bg};color:${lc.color};border:1px solid ${lc.border}">${e.level}</span>`;
+
+    // Build details string from remaining keys
+    const skip=new Set(['ts','level','event']);
+    const details=Object.entries(e)
+      .filter(([k])=>!skip.has(k))
+      .map(([k,v])=>`<span style="color:var(--cream-dim)">${k}=</span><span style="color:var(--cream)">${esc(String(v))}</span>`)
+      .join('  ');
+
+    return `<tr style="border-bottom:1px solid var(--rule)">
+      <td style="font-size:.72rem;color:var(--cream-dim);white-space:nowrap">${dateStr}<br>${timeStr}</td>
+      <td>${badge}</td>
+      <td style="font-size:.78rem;color:var(--brass-light);font-family:'IBM Plex Mono',monospace">${esc(e.event)}</td>
+      <td style="font-size:.74rem;font-family:'IBM Plex Mono',monospace;line-height:1.6">${details||'—'}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── USERS ─────────────────────────────────────
