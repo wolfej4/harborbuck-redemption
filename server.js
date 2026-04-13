@@ -129,9 +129,19 @@ function requireAdmin(req, res, next) {
 }
 function page(res, f) { res.sendFile(path.join(__dirname, 'public', f)); }
 
+// ── FAVICON ────────────────────────────────────
+app.get('/favicon.svg', (_req, res) => {
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+    <rect width="32" height="32" rx="6" fill="#0c1a2e"/>
+    <text x="16" y="23" text-anchor="middle" font-size="20" fill="#c49a3c">⚓</text>
+  </svg>`);
+});
+
 // ── HTML ROUTES ────────────────────────────────
 app.get('/',              requireAuth,  (_req, res) => page(res, 'index.html'));
 app.get('/admin',         requireAdmin, (_req, res) => page(res, 'admin.html'));
+app.get('/settings',      requireAuth,  (_req, res) => page(res, 'settings.html'));
 app.get('/login',     (req, res) => { if (req.session?.authenticated) return res.redirect('/'); if (!hasUsers()) return res.redirect('/setup'); page(res, 'login.html'); });
 app.get('/setup',     (req, res) => { if (hasUsers()) return res.redirect('/login'); page(res, 'setup.html'); });
 app.get('/register',  (req, res) => { if (!hasUsers()) return res.redirect('/setup'); if (getConfig('allow_registration','1') !== '1') return res.redirect('/login'); page(res, 'register.html'); });
@@ -362,6 +372,55 @@ app.get('/api/me', requireAuth, (req, res) => {
   const u = db.prepare('SELECT id,username,email,initials,role,mfa_type FROM users WHERE id=?').get(req.session.userId);
   if (!u) return res.status(404).json({ error: 'Not found.' });
   res.json(u);
+});
+
+// Update own profile
+app.post('/api/me/update', requireAuth, async (req, res) => {
+  const { field, value, currentPassword, newPassword, confirmPassword, mfaType } = req.body;
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  // Update email
+  if (field === 'email') {
+    const email = value?.trim() || null;
+    try {
+      db.prepare('UPDATE users SET email=? WHERE id=?').run(email, user.id);
+      return res.json({ ok: true });
+    } catch(e) {
+      if (e.message?.includes('UNIQUE')) return res.status(400).json({ error: 'Email already in use.' });
+      return res.status(500).json({ error: 'Failed to update email.' });
+    }
+  }
+
+  // Change password
+  if (field === 'password') {
+    if (!currentPassword) return res.status(400).json({ error: 'Current password required.' });
+    if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+    if (newPassword !== confirmPassword) return res.status(400).json({ error: 'Passwords do not match.' });
+    const match = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!match) return res.status(401).json({ error: 'Current password is incorrect.' });
+    const hash = await bcrypt.hash(newPassword, 12);
+    db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash, user.id);
+    return res.json({ ok: true });
+  }
+
+  // Change MFA type
+  if (field === 'mfa') {
+    const smtpOk  = !!getSmtpConfig()?.host;
+    const allowed = smtpOk ? ['none','totp','email'] : ['none','totp'];
+    if (!allowed.includes(mfaType)) return res.status(400).json({ error: 'Invalid MFA type.' });
+    if (mfaType === 'email' && !user.email) return res.status(400).json({ error: 'Add an email address before enabling email MFA.' });
+    if (mfaType === 'totp') {
+      // Need to go through setup flow
+      req.session.setupMfa = true;
+      db.prepare('UPDATE users SET mfa_type=?, totp_secret=NULL WHERE id=?').run('totp', user.id);
+      return res.json({ ok: true, redirect: '/setup-mfa' });
+    }
+    db.prepare('UPDATE users SET mfa_type=?, totp_secret=NULL WHERE id=?').run(mfaType, user.id);
+    return res.json({ ok: true });
+  }
+
+  res.status(400).json({ error: 'Unknown field.' });
 });
 
 // ── USERS: INITIALS LIST ───────────────────────

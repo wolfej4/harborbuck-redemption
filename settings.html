@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Harborbucks — Account Settings</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy:#0c1a2e; --navy-mid:#132238; --navy-light:#1a3050;
+  --brass:#c49a3c; --brass-light:#e0b84a; --brass-dim:#8a6a20;
+  --cream:#f0e8d8; --cream-dim:#b8ad99;
+  --red:#c0392b; --red-dim:#7d241b; --green:#2e7d52;
+  --rule:rgba(196,154,60,0.25);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--navy);
+  background-image: repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(196,154,60,.06) 39px, rgba(196,154,60,.06) 40px);
+  color: var(--cream);
+  font-family: 'IBM Plex Sans', sans-serif;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+header {
+  border-bottom: 2px solid var(--brass);
+  padding: 20px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, rgba(196,154,60,.08) 0%, transparent 100%);
+}
+.logo { font-family: 'Playfair Display', serif; font-size: 1.8rem; font-weight: 900; color: var(--brass-light); letter-spacing: .04em; }
+.logo span { font-family: 'IBM Plex Mono', monospace; font-size: .68rem; color: var(--brass-dim); letter-spacing: .16em; text-transform: uppercase; display: block; margin-top: 2px; }
+.header-nav { display: flex; gap: 20px; align-items: center; }
+.header-nav a { font-family: 'IBM Plex Mono', monospace; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--brass-dim); text-decoration: none; }
+.header-nav a:hover { color: var(--brass); }
+
+/* ── LAYOUT ── */
+.wrap { max-width: 680px; margin: 0 auto; padding: 36px 40px 60px; }
+.page-title { font-family: 'Playfair Display', serif; font-size: 1.9rem; font-weight: 700; color: var(--brass-light); margin-bottom: 8px; }
+.page-sub { font-family: 'IBM Plex Mono', monospace; font-size: .72rem; color: var(--cream-dim); letter-spacing: .06em; margin-bottom: 36px; }
+
+/* ── PROFILE CARD ── */
+.profile-card {
+  background: var(--navy-mid);
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--brass);
+  padding: 24px 28px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.avatar {
+  width: 56px; height: 56px;
+  background: var(--brass-dim);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.3rem; font-weight: 600; color: var(--navy);
+  flex-shrink: 0;
+}
+.profile-info .name { font-size: 1.1rem; font-weight: 600; color: var(--cream); }
+.profile-info .meta { font-family: 'IBM Plex Mono', monospace; font-size: .7rem; color: var(--cream-dim); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 12px; }
+.badge { padding: 2px 8px; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; border: 1px solid; }
+.badge-admin { color: var(--brass); background: rgba(196,154,60,.12); border-color: rgba(196,154,60,.3); }
+.badge-user  { color: var(--cream-dim); background: transparent; border-color: rgba(176,166,148,.2); }
+.badge-mfa-totp  { color: #80d4aa; background: rgba(46,125,82,.12); border-color: rgba(46,125,82,.3); }
+.badge-mfa-email { color: #80b4e0; background: rgba(46,82,125,.12); border-color: rgba(46,82,125,.3); }
+.badge-mfa-none  { color: var(--cream-dim); background: transparent; border-color: rgba(176,166,148,.2); }
+
+/* ── SETTINGS SECTIONS ── */
+.settings-section {
+  background: var(--navy-mid);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--brass);
+  padding: 24px 28px;
+  margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: .7rem; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--brass); border-bottom: 1px solid var(--rule);
+  padding-bottom: 10px; margin-bottom: 18px;
+}
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+label { font-family: 'IBM Plex Mono', monospace; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; color: var(--brass-dim); }
+input, select {
+  background: var(--navy-light); border: 1px solid var(--rule);
+  border-bottom: 2px solid var(--brass-dim); color: var(--cream);
+  font-family: 'IBM Plex Mono', monospace; font-size: .9rem;
+  padding: 10px 12px; outline: none; transition: border-color .15s, background .15s; width: 100%;
+}
+input::placeholder { color: rgba(176,166,148,.35); }
+input:focus, select:focus { border-bottom-color: var(--brass-light); background: rgba(26,48,80,.8); }
+select option { background: var(--navy-mid); }
+input[readonly] { opacity: .55; cursor: not-allowed; border-bottom-style: dashed; }
+
+.hint { font-family: 'IBM Plex Mono', monospace; font-size: .6rem; color: var(--cream-dim); margin-top: 3px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-actions { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+
+.btn {
+  font-family: 'IBM Plex Mono', monospace; font-size: .76rem; letter-spacing: .1em;
+  text-transform: uppercase; padding: 10px 20px; border: none; cursor: pointer; transition: all .15s;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary { background: var(--brass); color: var(--navy); font-weight: 600; }
+.btn-primary:hover:not(:disabled) { background: var(--brass-light); }
+.btn-ghost { background: transparent; color: var(--cream-dim); border: 1px solid var(--rule); }
+.btn-ghost:hover { border-color: var(--brass-dim); color: var(--cream); }
+.btn-danger { background: var(--red-dim); color: var(--cream); }
+.btn-danger:hover { background: var(--red); }
+
+.strength { height: 3px; background: var(--navy-light); margin-top: 4px; }
+.strength-bar { height: 100%; width: 0; transition: width .2s, background .2s; }
+
+/* ── MFA SECTION ── */
+.mfa-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.mfa-option {
+  display: flex; align-items: flex-start; gap: 14px;
+  background: var(--navy-light); border: 1px solid var(--rule);
+  padding: 14px 16px; cursor: pointer; transition: border-color .15s;
+}
+.mfa-option:hover { border-color: var(--brass-dim); }
+.mfa-option.selected { border-color: var(--brass); background: rgba(196,154,60,.06); }
+.mfa-option input[type="radio"] { margin-top: 2px; accent-color: var(--brass); flex-shrink: 0; }
+.mfa-option-label { font-family: 'IBM Plex Mono', monospace; font-size: .82rem; color: var(--cream); }
+.mfa-option-sub { font-size: .68rem; color: var(--cream-dim); margin-top: 3px; line-height: 1.5; }
+
+/* ── MESSAGE ── */
+.msg { font-family: 'IBM Plex Mono', monospace; font-size: .75rem; padding: 10px 14px; border-left: 3px solid; margin-bottom: 14px; display: none; }
+.msg.show { display: block; }
+.msg.success { color: var(--brass-light); background: rgba(196,154,60,.08); border-color: var(--brass); }
+.msg.error   { color: #e08080; background: rgba(192,57,43,.12); border-color: var(--red); }
+
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--navy-light); border-left: 3px solid var(--brass); color: var(--cream); font-family: 'IBM Plex Mono', monospace; font-size: .76rem; padding: 10px 16px; z-index: 200; opacity: 0; transform: translateY(8px); transition: all .2s; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { border-left-color: #3da66e; }
+.toast.error   { border-left-color: var(--red); }
+
+::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--navy); } ::-webkit-scrollbar-thumb { background: var(--brass-dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚓ Harborbucks <span>Account Settings</span></div>
+  <div class="header-nav">
+    <a href="/">← Back to Ledger</a>
+    <a href="/admin" id="admin-link" style="display:none">Admin ↗</a>
+    <a href="/auth/logout">Sign Out</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="page-title">Account Settings</div>
+  <div class="page-sub" id="page-sub">Loading…</div>
+
+  <!-- PROFILE CARD -->
+  <div class="profile-card">
+    <div class="avatar" id="avatar">?</div>
+    <div class="profile-info">
+      <div class="name" id="profile-name">—</div>
+      <div class="meta">
+        <span id="profile-initials-badge"></span>
+        <span id="profile-role-badge"></span>
+        <span id="profile-mfa-badge"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMAIL -->
+  <div class="settings-section">
+    <div class="section-title">Email Address</div>
+    <div class="msg" id="email-msg"></div>
+    <div class="field">
+      <label>Email</label>
+      <input id="email-input" type="email" placeholder="you@example.com" autocomplete="email">
+      <div class="hint">Used for password resets and email MFA codes.</div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="saveEmail()">Save Email</button>
+    </div>
+  </div>
+
+  <!-- PASSWORD -->
+  <div class="settings-section">
+    <div class="section-title">Change Password</div>
+    <div class="msg" id="pw-msg"></div>
+    <div class="field">
+      <label>Current Password</label>
+      <input id="pw-current" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>New Password</label>
+        <input id="pw-new" type="password" placeholder="••••••••" autocomplete="new-password" oninput="checkStrength()">
+        <div class="strength"><div class="strength-bar" id="sbar"></div></div>
+        <div class="hint" id="slabel"></div>
+      </div>
+      <div class="field">
+        <label>Confirm New Password</label>
+        <input id="pw-confirm" type="password" placeholder="••••••••" autocomplete="new-password">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="changePassword()">Update Password</button>
+    </div>
+  </div>
+
+  <!-- MFA -->
+  <div class="settings-section">
+    <div class="section-title">Two-Factor Authentication</div>
+    <div class="msg" id="mfa-msg"></div>
+    <div class="mfa-options" id="mfa-options">
+      <label class="mfa-option" id="opt-none">
+        <input type="radio" name="mfa" value="none" onchange="mfaSelectionChanged()">
+        <div>
+          <div class="mfa-option-label">None</div>
+          <div class="mfa-option-sub">Sign in with password only. Not recommended.</div>
+        </div>
+      </label>
+      <label class="mfa-option" id="opt-totp">
+        <input type="radio" name="mfa" value="totp" onchange="mfaSelectionChanged()">
+        <div>
+          <div class="mfa-option-label">Authenticator App (TOTP)</div>
+          <div class="mfa-option-sub">Use Google Authenticator, Authy, 1Password, or any TOTP app.</div>
+        </div>
+      </label>
+      <label class="mfa-option" id="opt-email" style="display:none">
+        <input type="radio" name="mfa" value="email" onchange="mfaSelectionChanged()">
+        <div>
+          <div class="mfa-option-label">Email Code</div>
+          <div class="mfa-option-sub">A 6-digit code will be sent to your email each time you sign in.</div>
+        </div>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" id="mfa-save-btn" onclick="saveMFA()">Save MFA Setting</button>
+      <span id="mfa-note" style="font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--cream-dim)"></span>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let currentUser = null;
+let smtpConfigured = false;
+
+async function init() {
+  const [me, cfg] = await Promise.all([
+    fetch('/api/me').then(r => r.json()),
+    fetch('/api/public-config').then(r => r.json()),
+  ]);
+  currentUser = me;
+  smtpConfigured = cfg.smtpConfigured;
+
+  // Profile card
+  document.getElementById('avatar').textContent = me.initials;
+  document.getElementById('profile-name').textContent = me.username;
+  document.getElementById('page-sub').textContent = `Signed in as ${me.username} (${me.initials})`;
+  document.getElementById('profile-initials-badge').innerHTML = `<span class="badge" style="color:var(--brass-light);background:rgba(196,154,60,.12);border-color:rgba(196,154,60,.3)">${me.initials}</span>`;
+  document.getElementById('profile-role-badge').innerHTML = `<span class="badge badge-${me.role}">${me.role}</span>`;
+  document.getElementById('profile-mfa-badge').innerHTML = `<span class="badge badge-mfa-${me.mfa_type}">MFA: ${me.mfa_type}</span>`;
+
+  // Show admin link
+  if (me.role === 'admin') document.getElementById('admin-link').style.display = 'inline';
+
+  // Email
+  document.getElementById('email-input').value = me.email || '';
+
+  // MFA options
+  if (smtpConfigured && me.email) document.getElementById('opt-email').style.display = 'flex';
+  const radios = document.querySelectorAll('input[name="mfa"]');
+  radios.forEach(r => {
+    r.checked = r.value === me.mfa_type;
+    r.closest('.mfa-option').classList.toggle('selected', r.checked);
+  });
+  updateMfaNote();
+}
+
+function mfaSelectionChanged() {
+  document.querySelectorAll('.mfa-option').forEach(el => {
+    el.classList.toggle('selected', el.querySelector('input').checked);
+  });
+  updateMfaNote();
+}
+
+function updateMfaNote() {
+  const selected = document.querySelector('input[name="mfa"]:checked')?.value;
+  const note = document.getElementById('mfa-note');
+  if (selected === 'totp' && currentUser?.mfa_type !== 'totp') {
+    note.textContent = 'You'll be asked to scan a QR code after saving.';
+  } else if (selected === currentUser?.mfa_type) {
+    note.textContent = 'No change.';
+  } else {
+    note.textContent = '';
+  }
+}
+
+// ── SAVE EMAIL ────────────────────────────────
+async function saveEmail() {
+  const email = document.getElementById('email-input').value.trim();
+  const msg = document.getElementById('email-msg');
+  msg.classList.remove('show');
+
+  try {
+    const res = await fetch('/api/me/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: 'email', value: email }),
+    });
+    const d = await res.json();
+    if (!res.ok) return showMsg('email-msg', d.error || 'Failed to save.', 'error');
+    currentUser.email = email;
+    // Refresh email MFA option visibility
+    if (smtpConfigured && email) document.getElementById('opt-email').style.display = 'flex';
+    else document.getElementById('opt-email').style.display = 'none';
+    toast('Email updated.', 'success');
+  } catch(e) { showMsg('email-msg', 'Network error.', 'error'); }
+}
+
+// ── CHANGE PASSWORD ───────────────────────────
+async function changePassword() {
+  const currentPassword  = document.getElementById('pw-current').value;
+  const newPassword      = document.getElementById('pw-new').value;
+  const confirmPassword  = document.getElementById('pw-confirm').value;
+
+  if (!currentPassword)              return showMsg('pw-msg', 'Enter your current password.', 'error');
+  if (newPassword.length < 8)        return showMsg('pw-msg', 'New password must be at least 8 characters.', 'error');
+  if (newPassword !== confirmPassword) return showMsg('pw-msg', 'Passwords do not match.', 'error');
+
+  try {
+    const res = await fetch('/api/me/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: 'password', currentPassword, newPassword, confirmPassword }),
+    });
+    const d = await res.json();
+    if (!res.ok) return showMsg('pw-msg', d.error || 'Failed.', 'error');
+    document.getElementById('pw-current').value = '';
+    document.getElementById('pw-new').value = '';
+    document.getElementById('pw-confirm').value = '';
+    document.getElementById('sbar').style.cssText = 'width:0';
+    document.getElementById('slabel').textContent = '';
+    toast('Password changed.', 'success');
+  } catch(e) { showMsg('pw-msg', 'Network error.', 'error'); }
+}
+
+// ── SAVE MFA ──────────────────────────────────
+async function saveMFA() {
+  const mfaType = document.querySelector('input[name="mfa"]:checked')?.value;
+  if (!mfaType) return;
+  if (mfaType === currentUser.mfa_type) return toast('No change.', '');
+
+  if (mfaType === 'email' && !currentUser.email) {
+    return showMsg('mfa-msg', 'Save an email address before enabling email MFA.', 'error');
+  }
+
+  const btn = document.getElementById('mfa-save-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/me/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: 'mfa', mfaType }),
+    });
+    const d = await res.json();
+    if (!res.ok) return showMsg('mfa-msg', d.error || 'Failed.', 'error');
+    if (d.redirect) {
+      window.location.href = d.redirect;
+      return;
+    }
+    currentUser.mfa_type = mfaType;
+    document.getElementById('profile-mfa-badge').innerHTML = `<span class="badge badge-mfa-${mfaType}">MFA: ${mfaType}</span>`;
+    document.getElementById('mfa-note').textContent = '';
+    toast('MFA updated.', 'success');
+  } catch(e) { showMsg('mfa-msg', 'Network error.', 'error'); }
+  finally { btn.disabled = false; }
+}
+
+// ── HELPERS ───────────────────────────────────
+function checkStrength() {
+  const pw = document.getElementById('pw-new').value;
+  let s = 0;
+  if (pw.length >= 8)  s++;
+  if (pw.length >= 12) s++;
+  if (/[A-Z]/.test(pw)) s++;
+  if (/[0-9]/.test(pw)) s++;
+  if (/[^A-Za-z0-9]/.test(pw)) s++;
+  const cols = ['','#c0392b','#e67e22','#c49a3c','#2e7d52','#3da66e'];
+  const labs = ['','Weak','Fair','Good','Strong','Very strong'];
+  document.getElementById('sbar').style.cssText = `width:${s/5*100}%;background:${cols[s]||'transparent'}`;
+  document.getElementById('slabel').textContent = s > 0 ? labs[s] : '';
+}
+
+function showMsg(id, msg, type) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.className = `msg show ${type}`;
+}
+
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+init();
+</script>
+</body>
+</html>
