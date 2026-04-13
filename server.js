@@ -98,6 +98,7 @@ db.exec(`
     { col: 'role',        sql: "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'" },
     { col: 'mfa_type',    sql: "ALTER TABLE users ADD COLUMN mfa_type TEXT NOT NULL DEFAULT 'none'" },
     { col: 'totp_secret', sql: 'ALTER TABLE users ADD COLUMN totp_secret TEXT' },
+    { col: 'avatar_data', sql: 'ALTER TABLE users ADD COLUMN avatar_data TEXT' },
   ];
   for (const m of migrations) {
     if (!existingCols.includes(m.col)) {
@@ -490,9 +491,10 @@ app.post('/auth/reset-confirm', async (req, res) => {
 
 // ── ME ─────────────────────────────────────────
 app.get('/api/me', requireAuth, (req, res) => {
-  const u = db.prepare('SELECT id,username,email,initials,role,mfa_type FROM users WHERE id=?').get(req.session.userId);
+  const u = db.prepare('SELECT id,username,email,initials,role,mfa_type,avatar_data FROM users WHERE id=?').get(req.session.userId);
   if (!u) return res.status(404).json({ error: 'Not found.' });
-  res.json(u);
+  const { avatar_data, ...rest } = u;
+  res.json({ ...rest, hasAvatar: !!avatar_data });
 });
 
 app.post('/api/me/update', requireAuth, async (req, res) => {
@@ -543,6 +545,40 @@ app.post('/api/me/update', requireAuth, async (req, res) => {
   }
 
   res.status(400).json({ error: 'Unknown field.' });
+});
+
+// ── AVATAR ─────────────────────────────────────
+// Upload (base64 data URL sent as JSON — client resizes to 200×200 before sending)
+app.post('/api/me/avatar', requireAuth, (req, res) => {
+  const { data } = req.body;
+  if (!data || typeof data !== 'string') return res.status(400).json({ error: 'No image data.' });
+  if (!data.startsWith('data:image/')) return res.status(400).json({ error: 'Invalid image format.' });
+  // Rough size check — base64 of a 200×200 JPEG should be well under 100 KB
+  if (data.length > 200 * 1024) return res.status(400).json({ error: 'Image too large. Max ~150 KB.' });
+  const user = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId);
+  db.prepare('UPDATE users SET avatar_data=? WHERE id=?').run(data, req.session.userId);
+  log('info', 'account.avatar_updated', { user: user?.username });
+  res.json({ ok: true });
+});
+
+// Serve avatar image for any authenticated user
+app.get('/api/avatar/:userId', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT avatar_data FROM users WHERE id=?').get(req.params.userId);
+  if (!row?.avatar_data) return res.status(404).send('No avatar.');
+  const [header, b64] = row.avatar_data.split(',');
+  const mimeMatch = header.match(/data:([^;]+)/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.send(Buffer.from(b64, 'base64'));
+});
+
+// Delete own avatar
+app.delete('/api/me/avatar', requireAuth, (req, res) => {
+  const user = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId);
+  db.prepare('UPDATE users SET avatar_data=NULL WHERE id=?').run(req.session.userId);
+  log('info', 'account.avatar_removed', { user: user?.username });
+  res.json({ ok: true });
 });
 
 // ── USERS: INITIALS LIST ───────────────────────

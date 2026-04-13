@@ -52,16 +52,66 @@ header {
   margin-bottom: 24px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
+}
+
+/* Avatar upload zone */
+.avatar-wrap {
+  position: relative;
+  width: 80px; height: 80px;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 .avatar {
-  width: 56px; height: 56px;
+  width: 80px; height: 80px;
   background: var(--brass-dim);
   display: flex; align-items: center; justify-content: center;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 1.3rem; font-weight: 600; color: var(--navy);
-  flex-shrink: 0;
+  font-size: 1.6rem; font-weight: 600; color: var(--navy);
+  overflow: hidden;
+  transition: filter .2s;
 }
+.avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-overlay {
+  position: absolute; inset: 0;
+  background: rgba(12,26,46,.72);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity .18s;
+  pointer-events: none;
+}
+.avatar-wrap:hover .avatar-overlay { opacity: 1; }
+.avatar-overlay-icon { font-size: 1.2rem; }
+.avatar-overlay-text {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: .5rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--brass-light);
+}
+.avatar-spinner {
+  position: absolute; inset: 0;
+  background: rgba(12,26,46,.8);
+  display: none; align-items: center; justify-content: center;
+  font-size: 1.4rem;
+}
+.avatar-spinner.show { display: flex; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinning { display: inline-block; animation: spin .8s linear infinite; }
+
+.avatar-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.btn-avatar-remove {
+  font-family: 'IBM Plex Mono', monospace; font-size: .62rem;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 4px 10px; cursor: pointer; transition: all .12s;
+  background: rgba(192,57,43,.12); color: #e08080;
+  border: 1px solid rgba(192,57,43,.3);
+}
+.btn-avatar-remove:hover { background: rgba(192,57,43,.28); }
 .profile-info .name { font-size: 1.1rem; font-weight: 600; color: var(--cream); }
 .profile-info .meta { font-family: 'IBM Plex Mono', monospace; font-size: .7rem; color: var(--cream-dim); margin-top: 4px; display: flex; flex-wrap: wrap; gap: 12px; }
 .badge { padding: 2px 8px; font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; border: 1px solid; }
@@ -148,7 +198,10 @@ input[readonly] { opacity: .55; cursor: not-allowed; border-bottom-style: dashed
 <body>
 
 <header>
-  <div class="logo">⚓ Harborbucks <span>Account Settings</span></div>
+  <div class="logo">
+    <a href="/" style="text-decoration:none;color:inherit">⚓ Harborbucks</a>
+    <span>Account Settings</span>
+  </div>
   <div class="header-nav">
     <a href="/">← Back to Ledger</a>
     <a href="/admin" id="admin-link" style="display:none">Admin ↗</a>
@@ -161,7 +214,20 @@ input[readonly] { opacity: .55; cursor: not-allowed; border-bottom-style: dashed
 
   <!-- PROFILE CARD -->
   <div class="profile-card">
-    <div class="avatar" id="avatar">⚓</div>
+    <div>
+      <div class="avatar-wrap" onclick="document.getElementById('avatar-file').click()" title="Click to change photo">
+        <div class="avatar" id="avatar">⚓</div>
+        <div class="avatar-overlay">
+          <div class="avatar-overlay-icon">📷</div>
+          <div class="avatar-overlay-text">Change</div>
+        </div>
+        <div class="avatar-spinner" id="avatar-spinner"><span class="spinning">⟳</span></div>
+      </div>
+      <div class="avatar-actions">
+        <button class="btn-avatar-remove" id="avatar-remove-btn" style="display:none" onclick="removeAvatar()">Remove</button>
+      </div>
+      <input type="file" id="avatar-file" accept="image/*" style="display:none" onchange="handleAvatarFile(event)">
+    </div>
     <div class="profile-info">
       <div class="name" id="profile-name">—</div>
       <div class="meta">
@@ -264,16 +330,21 @@ async function init() {
     currentUser    = me;
     smtpConfigured = cfg.smtpConfigured;
 
-    // Derive best available display for initials
     const initials = (me.initials && me.initials.trim())
       ? me.initials.trim().toUpperCase()
       : (me.username ? me.username.slice(0, 2).toUpperCase() : null);
 
-    // Profile card — avatar shows initials if available, anchor if not
-    document.getElementById('avatar').textContent       = initials || '⚓';
-    document.getElementById('avatar').style.fontSize   = initials ? '1.3rem' : '1.8rem';
-    document.getElementById('profile-name').textContent = me.username || '—';
+    // Avatar
+    if (me.hasAvatar) {
+      setAvatarImage(`/api/avatar/${me.id}?t=${Date.now()}`);
+      document.getElementById('avatar-remove-btn').style.display = 'inline-block';
+    } else {
+      document.getElementById('avatar').textContent    = initials || '⚓';
+      document.getElementById('avatar').style.fontSize = initials ? '1.6rem' : '1.9rem';
+    }
 
+    // Profile info
+    document.getElementById('profile-name').textContent = me.username || '—';
     document.getElementById('profile-initials-badge').innerHTML = initials
       ? `<span class="badge" style="color:var(--brass-light);background:rgba(196,154,60,.12);border-color:rgba(196,154,60,.3)">${initials}</span>`
       : `<span class="badge" style="color:var(--cream-dim);border-color:rgba(176,166,148,.2)">No initials set</span>`;
@@ -282,13 +353,10 @@ async function init() {
     document.getElementById('profile-mfa-badge').innerHTML =
       `<span class="badge badge-mfa-${me.mfa_type}">MFA: ${me.mfa_type}</span>`;
 
-    // Show admin link
     if (me.role === 'admin') document.getElementById('admin-link').style.display = 'inline';
 
-    // Email
     document.getElementById('email-input').value = me.email || '';
 
-    // MFA options — show email option only if SMTP is on and user has an email
     if (smtpConfigured && me.email) document.getElementById('opt-email').style.display = 'flex';
 
     document.querySelectorAll('input[name="mfa"]').forEach(r => {
@@ -298,12 +366,92 @@ async function init() {
     updateMfaNote();
 
   } catch(e) {
-    document.getElementById('avatar').textContent        = '!';
+    document.getElementById('avatar').textContent       = '!';
     document.getElementById('avatar').style.background  = 'var(--red-dim)';
-    document.getElementById('avatar').style.fontSize    = '1.4rem';
     document.getElementById('profile-name').textContent = 'Error loading profile';
     console.error('Settings init error:', e);
   }
+}
+
+// ── AVATAR ────────────────────────────────────
+function setAvatarImage(src) {
+  const el = document.getElementById('avatar');
+  el.textContent = '';
+  const img = document.createElement('img');
+  img.src = src;
+  img.alt = 'Avatar';
+  el.appendChild(img);
+}
+
+async function handleAvatarFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) return toast('Please select an image file.', 'error');
+
+  // Resize to 200×200 square via canvas
+  const spinner = document.getElementById('avatar-spinner');
+  spinner.classList.add('show');
+
+  try {
+    const dataUrl = await resizeImage(file, 200);
+    const res = await fetch('/api/me/avatar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: dataUrl }),
+    });
+    const d = await res.json();
+    if (!res.ok) return toast(d.error || 'Upload failed.', 'error');
+    setAvatarImage(dataUrl);
+    document.getElementById('avatar-remove-btn').style.display = 'inline-block';
+    toast('Avatar updated.', 'success');
+  } catch(err) {
+    toast('Upload failed. Try again.', 'error');
+  } finally {
+    spinner.classList.remove('show');
+    e.target.value = ''; // allow re-selecting same file
+  }
+}
+
+async function removeAvatar() {
+  const spinner = document.getElementById('avatar-spinner');
+  spinner.classList.add('show');
+  try {
+    await fetch('/api/me/avatar', { method: 'DELETE' });
+    const initials = (currentUser.initials && currentUser.initials.trim())
+      ? currentUser.initials.trim().toUpperCase()
+      : (currentUser.username ? currentUser.username.slice(0, 2).toUpperCase() : null);
+    const el = document.getElementById('avatar');
+    el.innerHTML = '';
+    el.textContent    = initials || '⚓';
+    el.style.fontSize = initials ? '1.6rem' : '1.9rem';
+    document.getElementById('avatar-remove-btn').style.display = 'none';
+    toast('Avatar removed.', 'success');
+  } catch(err) {
+    toast('Failed to remove avatar.', 'error');
+  } finally {
+    spinner.classList.remove('show');
+  }
+}
+
+function resizeImage(file, size) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      // Centre-crop to square
+      const min = Math.min(img.width, img.height);
+      const sx  = (img.width  - min) / 2;
+      const sy  = (img.height - min) / 2;
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.88));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
 }
 
 function mfaSelectionChanged() {
