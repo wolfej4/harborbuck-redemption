@@ -227,7 +227,7 @@ app.patch('/api/entries/:id/void', requireAuth, (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Failed to toggle void.' }); }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Harborbucks running on http://0.0.0.0:${PORT}`);
   console.log(`Database: ${DB_PATH}`);
 });
