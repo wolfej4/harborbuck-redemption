@@ -796,20 +796,6 @@ app.put('/api/entries/:id', requireAuth, (req, res) => {
   } catch(e) { log('error', 'entry.edit_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to update entry.' }); }
 });
 
-app.patch('/api/entries/:id/void', requireAuth, (req, res) => {
-  const { id } = req.params;
-  try {
-    const row = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
-    if (!row) return res.status(404).json({ error: 'Entry not found.' });
-    const newStatus = row.status === 'voided' ? 'active' : 'voided';
-    db.prepare('UPDATE entries SET voided=?, status=? WHERE id=?').run(newStatus === 'voided' ? 1 : 0, newStatus, id);
-    const updated  = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
-    const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
-    log('warn', newStatus === 'voided' ? 'entry.voided' : 'entry.restored', { user: username, entryId: id, checkNumber: row.check_number, amount: row.amount });
-    res.json(rowToEntry(updated));
-  } catch(e) { log('error', 'entry.void_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to toggle void.' }); }
-});
-
 app.patch('/api/entries/:id/archive', requireAuth, (req, res) => {
   const { id } = req.params;
   try {
@@ -824,18 +810,16 @@ app.patch('/api/entries/:id/archive', requireAuth, (req, res) => {
   } catch(e) { log('error', 'entry.archive_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to toggle archive.' }); }
 });
 
-app.patch('/api/entries/:id/delete', requireAuth, (req, res) => {
+app.delete('/api/entries/:id', requireAuth, (req, res) => {
   const { id } = req.params;
   try {
     const row = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
     if (!row) return res.status(404).json({ error: 'Entry not found.' });
-    const newStatus = row.status === 'deleted' ? 'active' : 'deleted';
-    db.prepare('UPDATE entries SET voided=0, status=? WHERE id=?').run(newStatus, id);
-    const updated  = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
+    db.prepare('DELETE FROM entries WHERE id=?').run(id);
     const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
-    log('warn', newStatus === 'deleted' ? 'entry.deleted' : 'entry.restored', { user: username, entryId: id, checkNumber: row.check_number, amount: row.amount });
-    res.json(rowToEntry(updated));
-  } catch(e) { log('error', 'entry.delete_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to toggle delete.' }); }
+    log('warn', 'entry.deleted', { user: username, entryId: id, checkNumber: row.check_number, amount: row.amount });
+    res.json({ ok: true, id });
+  } catch(e) { log('error', 'entry.delete_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to delete entry.' }); }
 });
 
 // ── START ──────────────────────────────────────
