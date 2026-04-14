@@ -1,6 +1,12 @@
 <!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Harborbucks — Reset Password</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0c1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -56,4 +62,4 @@ async function submit(){
   finally{ btn.disabled=false; btn.textContent='Send Reset Link'; }
 }
 function showMsg(m,t){const e=document.getElementById('msg');e.textContent=m;e.className=`msg show ${t}`}
-</script></body></html>
+</script><script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script></body></html>

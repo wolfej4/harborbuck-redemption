@@ -223,6 +223,13 @@ app.get('/favicon.svg', (_req, res) => {
   res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#0c1a2e"/><text x="16" y="23" text-anchor="middle" font-size="20" fill="#c49a3c">⚓</text></svg>`);
 });
 
+// ── PWA STATIC FILES ──────────────────────────
+function staticFile(f) { return path.join(__dirname, 'public', f); }
+app.get('/manifest.json',    (_req, res) => res.sendFile(staticFile('manifest.json')));
+app.get('/sw.js',             (_req, res) => { res.setHeader('Content-Type', 'application/javascript'); res.sendFile(staticFile('sw.js')); });
+app.get('/icon.svg',          (_req, res) => { res.setHeader('Content-Type', 'image/svg+xml'); res.sendFile(staticFile('icon.svg')); });
+app.get('/icon-maskable.svg', (_req, res) => { res.setHeader('Content-Type', 'image/svg+xml'); res.sendFile(staticFile('icon-maskable.svg')); });
+
 // ── HTML ROUTES ────────────────────────────────
 app.get('/',             requireAuth,  (_req, res) => page(res, 'index.html'));
 app.get('/admin',        requireAdmin, (_req, res) => page(res, 'admin.html'));
