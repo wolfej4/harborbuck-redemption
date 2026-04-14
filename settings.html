@@ -271,7 +271,7 @@ async function init() {
     document.getElementById('initials-input').value = me.initials || '';
     document.getElementById('email-input').value    = me.email || '';
 
-    if (smtpConfigured && me.email) document.getElementById('opt-email').style.display = 'flex';
+    if (smtpConfigured) document.getElementById('opt-email').style.display = 'flex';
 
     document.querySelectorAll('input[name="mfa"]').forEach(r => {
       r.checked = r.value === me.mfa_type;
@@ -318,9 +318,6 @@ async function saveEmail() {
     const d = await res.json();
     if (!res.ok) return showMsg('email-msg', d.error || 'Failed to save.', 'error');
     currentUser.email = email;
-    // Refresh email MFA option visibility
-    if (smtpConfigured && email) document.getElementById('opt-email').style.display = 'flex';
-    else document.getElementById('opt-email').style.display = 'none';
     toast('Email updated.', 'success');
   } catch(e) { showMsg('email-msg', 'Network error.', 'error'); }
 }
