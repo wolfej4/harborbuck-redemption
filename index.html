@@ -338,12 +338,8 @@
 
   tbody tr { border-bottom: 1px solid var(--rule); transition: background 0.1s; }
   tbody tr:hover { background: rgba(196,154,60,0.04); }
-  tbody tr.voided { opacity: 0.4; }
-  tbody tr.voided td { text-decoration: line-through; }
   tbody tr.archived { opacity: 0.35; }
   tbody tr.archived td { text-decoration: line-through; font-style: italic; }
-  tbody tr.deleted { opacity: 0.25; }
-  tbody tr.deleted td { text-decoration: line-through; }
 
   td {
     font-family: 'IBM Plex Mono', monospace; font-size: 0.83rem;
@@ -369,8 +365,6 @@
 
   .btn-edit { background: rgba(196,154,60,0.15); color: var(--brass); border: 1px solid rgba(196,154,60,0.3); }
   .btn-edit:hover { background: rgba(196,154,60,0.28); }
-  .btn-void { background: rgba(192,57,43,0.15); color: #e08080; border: 1px solid rgba(192,57,43,0.3); }
-  .btn-void:hover { background: rgba(192,57,43,0.3); }
   .btn-restore { background: rgba(46,125,82,0.15); color: #80d4aa; border: 1px solid rgba(46,125,82,0.3); }
   .btn-restore:hover { background: rgba(46,125,82,0.3); }
   .btn-archive { background: rgba(52,73,94,0.25); color: #8eaabd; border: 1px solid rgba(52,73,94,0.45); }
@@ -530,16 +524,8 @@
       <div class="filter-row">
         <input class="filter-input" id="filter-manager" placeholder="Filter by initials…" oninput="renderTable()">
         <label class="void-toggle">
-          <input type="checkbox" id="show-voided" onchange="renderTable()">
-          Show voided
-        </label>
-        <label class="void-toggle">
           <input type="checkbox" id="show-archived" onchange="renderTable()">
           Show archived
-        </label>
-        <label class="void-toggle">
-          <input type="checkbox" id="show-deleted" onchange="renderTable()">
-          Show deleted
         </label>
         <button class="btn btn-sm btn-export" onclick="exportCSV()">↓ Export CSV</button>
       </div>
@@ -775,25 +761,16 @@
     const active = entries.filter(e => e.status === 'active');
     const totalAmount   = active.reduce((s, e) => s + e.amount, 0);
     const totalVouchers = active.reduce((s, e) => s + e.voucherCount, 0);
-    const voidedCount   = entries.filter(e => e.status === 'voided').length;
-    const voidedAmount  = entries.filter(e => e.status === 'voided').reduce((s, e) => s + e.amount, 0);
     const archivedCount = entries.filter(e => e.status === 'archived').length;
-    const deletedCount  = entries.filter(e => e.status === 'deleted').length;
-    const inactiveCount = voidedCount + archivedCount + deletedCount;
     const avg = active.length ? totalAmount / active.length : 0;
 
     document.getElementById('stat-total').textContent     = '$' + totalAmount.toFixed(2);
     document.getElementById('stat-vouchers').textContent  = totalVouchers;
     document.getElementById('stat-entries').textContent   = entries.length;
-    const parts = [];
-    if (voidedCount)   parts.push(voidedCount + ' voided');
-    if (archivedCount) parts.push(archivedCount + ' archived');
-    if (deletedCount)  parts.push(deletedCount + ' deleted');
-    document.getElementById('stat-voided-count').textContent = parts.join(', ') || '0 inactive';
+    document.getElementById('stat-voided-count').textContent = archivedCount ? archivedCount + ' archived' : '';
     document.getElementById('stat-avg').textContent       = '$' + avg.toFixed(2);
     document.getElementById('entry-count-header').textContent = entries.length + ' entries logged';
-    document.getElementById('stat-voided-note').textContent =
-      voidedCount > 0 ? `(${voidedCount} voided, $${voidedAmount.toFixed(2)})` : '';
+    document.getElementById('stat-voided-note').textContent = '';
   }
 
   function renderManagerBreakdown() {
@@ -826,15 +803,11 @@
   }
 
   function renderTable() {
-    const showVoided   = document.getElementById('show-voided').checked;
     const showArchived = document.getElementById('show-archived').checked;
-    const showDeleted  = document.getElementById('show-deleted').checked;
     const filterMgr    = document.getElementById('filter-manager').value.trim().toLowerCase();
 
     let filtered = entries.filter(e => {
-      if (!showVoided && e.status === 'voided') return false;
       if (!showArchived && e.status === 'archived') return false;
-      if (!showDeleted && e.status === 'deleted') return false;
       if (filterMgr && !e.manager.toLowerCase().includes(filterMgr)) return false;
       return true;
     });
@@ -859,7 +832,6 @@
 
       const rowClass = e.status !== 'active' ? e.status : '';
       const isActive = e.status === 'active';
-      const restoreAction = e.status === 'voided' ? 'Void' : e.status === 'archived' ? 'Archive' : 'Delete';
 
       return `<tr class="${rowClass}">
         <td>${dateStr}<br><small style="color:var(--cream-dim)">${timeStr}</small></td>
@@ -870,10 +842,9 @@
         <td><span style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;background:rgba(196,154,60,.12);border:1px solid rgba(196,154,60,.25);color:var(--brass-light);padding:2px 8px">${esc(e.manager)}</span></td>
         <td><div class="action-cell">
           ${isActive ? `<button class="btn-sm btn-edit" onclick="openEdit('${e.id}')">Edit</button>` : ''}
-          ${isActive ? `<button class="btn-sm btn-void" onclick="toggleStatus('${e.id}','void')">Void</button>` : ''}
           ${isActive ? `<button class="btn-sm btn-archive" onclick="toggleStatus('${e.id}','archive')">Archive</button>` : ''}
-          ${isActive ? `<button class="btn-sm btn-delete" onclick="toggleStatus('${e.id}','delete')">Delete</button>` : ''}
-          ${!isActive ? `<button class="btn-sm btn-restore" onclick="toggleStatus('${e.id}','${restoreAction.toLowerCase()}')">Restore</button>` : ''}
+          ${isActive ? `<button class="btn-sm btn-delete" onclick="deleteEntry('${e.id}')">Delete</button>` : ''}
+          ${!isActive ? `<button class="btn-sm btn-restore" onclick="toggleStatus('${e.id}','archive')">Restore</button>` : ''}
         </div></td>
       </tr>`;
     }).join('');
@@ -928,8 +899,19 @@
       const idx = entries.findIndex(e => e.id === id);
       if (idx !== -1) entries[idx] = updated;
       renderAll();
-      const labels = { voided: 'Entry voided.', archived: 'Entry archived.', deleted: 'Entry deleted.', active: 'Entry restored.' };
-      toast(labels[updated.status] || 'Entry updated.');
+      toast(updated.status === 'active' ? 'Entry restored.' : 'Entry archived.');
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function deleteEntry(id) {
+    if (!confirm('Permanently delete this entry? This cannot be undone.')) return;
+    try {
+      await api('DELETE', `/entries/${id}`);
+      entries = entries.filter(e => e.id !== id);
+      renderAll();
+      toast('Entry deleted.');
     } catch (err) {
       toast(err.message, true);
     }
@@ -989,14 +971,11 @@
 
   // ── CSV EXPORT ────────────────────────────────
   function exportCSV() {
-    const showVoided = document.getElementById('show-voided').checked;
-    // Always exclude archived and deleted from export; voided only if checkbox is checked
-    const toExport = entries.filter(e =>
-      e.status !== 'archived' && e.status !== 'deleted' && (showVoided || e.status !== 'voided')
-    );
+    // Exclude archived entries from export; deleted entries are already gone from DB
+    const toExport = entries.filter(e => e.status !== 'archived');
 
     const rows = [
-      ['Date', 'Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Initials', 'Status'],
+      ['Date', 'Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Initials'],
       ...toExport.map(e => {
         const dt = new Date(e.createdAt);
         return [
@@ -1006,8 +985,7 @@
           e.checkNumber,
           e.voucherCount,
           e.amount.toFixed(2),
-          e.manager,
-          e.status
+          e.manager
         ];
       })
     ];
