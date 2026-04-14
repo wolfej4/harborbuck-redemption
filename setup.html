@@ -42,12 +42,43 @@ select option{background:var(--navy-mid)}
   <div class="field"><label>Password</label><input id="password" type="password" autocomplete="new-password" oninput="checkStrength()"><div class="strength"><div class="strength-bar" id="sbar"></div></div><div class="hint" id="slabel"></div></div>
   <div class="field"><label>Confirm Password</label><input id="confirm" type="password" autocomplete="new-password"></div>
   <div class="field"><label>MFA Method</label>
-    <select id="mfa">
+    <select id="mfa" onchange="mfaChanged()">
       <option value="none">None — sign in with password only</option>
       <option value="totp">Authenticator App (TOTP)</option>
+      <option value="email" id="mfa-email-opt" style="display:none">Email Code</option>
     </select>
-    <div class="hint">Email MFA can be enabled after configuring SMTP in admin settings.</div>
+    <div class="hint" id="mfa-hint">Email MFA can be enabled after configuring SMTP below.</div>
   </div>
+
+  <div class="field" style="margin-top:8px;margin-bottom:0">
+    <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
+      <input type="checkbox" id="smtp-toggle" onchange="toggleSmtp()" style="accent-color:var(--brass);width:14px;height:14px">
+      Configure SMTP for email features
+    </label>
+    <div class="hint">Required for email MFA and password resets.</div>
+  </div>
+
+  <div id="smtp-section" style="display:none;margin-top:14px;border-top:1px solid var(--rule);padding-top:14px">
+    <div class="row2">
+      <div class="field"><label>SMTP Host</label><input id="smtp-host" type="text" placeholder="smtp.example.com" autocomplete="off"></div>
+      <div class="field"><label>Port</label><input id="smtp-port" type="number" placeholder="587" min="1" max="65535"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Username</label><input id="smtp-user" type="text" placeholder="user@example.com" autocomplete="off"></div>
+      <div class="field"><label>Password</label><input id="smtp-pass" type="password" placeholder="app password" autocomplete="off"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>From Address</label><input id="smtp-from" type="email" placeholder="noreply@example.com" autocomplete="off"></div>
+      <div class="field" style="justify-content:flex-end">
+        <label>&nbsp;</label>
+        <label style="font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--brass-dim);cursor:pointer;display:flex;align-items:center;gap:6px">
+          <input type="checkbox" id="smtp-secure" style="accent-color:var(--brass);width:14px;height:14px">
+          Use TLS / SSL
+        </label>
+      </div>
+    </div>
+  </div>
+
   <button class="btn" id="btn" onclick="setup()">Create Account →</button>
 </div>
 <script>
@@ -59,6 +90,27 @@ function checkStrength(){
   const labs=['','Weak','Fair','Good','Strong','Very strong'];
   document.getElementById('sbar').style.cssText=`width:${s/5*100}%;background:${cols[s]||'transparent'}`;
   document.getElementById('slabel').textContent=s>0?labs[s]:'';
+}
+function toggleSmtp(){
+  const on=document.getElementById('smtp-toggle').checked;
+  document.getElementById('smtp-section').style.display=on?'block':'none';
+  document.getElementById('mfa-email-opt').style.display=on?'':'none';
+  if(!on&&document.getElementById('mfa').value==='email') document.getElementById('mfa').value='none';
+  mfaChanged();
+}
+function mfaChanged(){
+  const v=document.getElementById('mfa').value;
+  const hint=document.getElementById('mfa-hint');
+  if(v==='email'&&!document.getElementById('email').value.trim()){
+    hint.textContent='An email address is required for email MFA.';
+    hint.style.color='#e08080';
+  } else if(v==='email'){
+    hint.textContent='A 6-digit code will be sent to your email each sign-in.';
+    hint.style.color='';
+  } else {
+    hint.textContent='Email MFA can be enabled after configuring SMTP below.';
+    hint.style.color='';
+  }
 }
 async function setup(){
   const username=document.getElementById('username').value.trim();
@@ -72,9 +124,23 @@ async function setup(){
   if(!/^[A-Za-z0-9]{2,4}$/.test(initials)) return showErr('Initials must be 2–4 letters/numbers.');
   if(password!==confirmPassword) return showErr('Passwords do not match.');
   if(password.length<8) return showErr('Password must be at least 8 characters.');
+  if(mfaType==='email'&&!email) return showErr('Email address is required for email MFA.');
+  const body={username,email,password,confirmPassword,initials,mfaType};
+  if(document.getElementById('smtp-toggle').checked){
+    const host=document.getElementById('smtp-host').value.trim();
+    if(!host) return showErr('SMTP host is required when configuring email.');
+    body.smtp={
+      host,
+      port:parseInt(document.getElementById('smtp-port').value)||587,
+      user:document.getElementById('smtp-user').value.trim(),
+      pass:document.getElementById('smtp-pass').value,
+      from:document.getElementById('smtp-from').value.trim(),
+      secure:document.getElementById('smtp-secure').checked,
+    };
+  }
   btn.disabled=true; btn.textContent='Creating account…';
   try{
-    const r1=await fetch('/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,email,password,confirmPassword,initials,mfaType})});
+    const r1=await fetch('/auth/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const d1=await r1.json();
     if(!r1.ok) return showErr(d1.error||'Setup failed.');
     window.location.href=d1.redirect||'/';
