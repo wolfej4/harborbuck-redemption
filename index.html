@@ -340,6 +340,10 @@
   tbody tr:hover { background: rgba(196,154,60,0.04); }
   tbody tr.voided { opacity: 0.4; }
   tbody tr.voided td { text-decoration: line-through; }
+  tbody tr.archived { opacity: 0.35; }
+  tbody tr.archived td { text-decoration: line-through; font-style: italic; }
+  tbody tr.deleted { opacity: 0.25; }
+  tbody tr.deleted td { text-decoration: line-through; }
 
   td {
     font-family: 'IBM Plex Mono', monospace; font-size: 0.83rem;
@@ -369,6 +373,10 @@
   .btn-void:hover { background: rgba(192,57,43,0.3); }
   .btn-restore { background: rgba(46,125,82,0.15); color: #80d4aa; border: 1px solid rgba(46,125,82,0.3); }
   .btn-restore:hover { background: rgba(46,125,82,0.3); }
+  .btn-archive { background: rgba(52,73,94,0.25); color: #8eaabd; border: 1px solid rgba(52,73,94,0.45); }
+  .btn-archive:hover { background: rgba(52,73,94,0.4); }
+  .btn-delete { background: rgba(192,57,43,0.08); color: #c07070; border: 1px solid rgba(192,57,43,0.2); }
+  .btn-delete:hover { background: rgba(192,57,43,0.2); }
 
   .serial-pills { display: flex; flex-wrap: wrap; gap: 4px; }
   .serial-pill {
@@ -524,6 +532,14 @@
         <label class="void-toggle">
           <input type="checkbox" id="show-voided" onchange="renderTable()">
           Show voided
+        </label>
+        <label class="void-toggle">
+          <input type="checkbox" id="show-archived" onchange="renderTable()">
+          Show archived
+        </label>
+        <label class="void-toggle">
+          <input type="checkbox" id="show-deleted" onchange="renderTable()">
+          Show deleted
         </label>
         <button class="btn btn-sm btn-export" onclick="exportCSV()">↓ Export CSV</button>
       </div>
@@ -756,17 +772,24 @@
   }
 
   function renderSummary() {
-    const active = entries.filter(e => !e.voided);
+    const active = entries.filter(e => e.status === 'active');
     const totalAmount   = active.reduce((s, e) => s + e.amount, 0);
     const totalVouchers = active.reduce((s, e) => s + e.voucherCount, 0);
-    const voidedCount   = entries.filter(e => e.voided).length;
-    const voidedAmount  = entries.filter(e => e.voided).reduce((s, e) => s + e.amount, 0);
+    const voidedCount   = entries.filter(e => e.status === 'voided').length;
+    const voidedAmount  = entries.filter(e => e.status === 'voided').reduce((s, e) => s + e.amount, 0);
+    const archivedCount = entries.filter(e => e.status === 'archived').length;
+    const deletedCount  = entries.filter(e => e.status === 'deleted').length;
+    const inactiveCount = voidedCount + archivedCount + deletedCount;
     const avg = active.length ? totalAmount / active.length : 0;
 
     document.getElementById('stat-total').textContent     = '$' + totalAmount.toFixed(2);
     document.getElementById('stat-vouchers').textContent  = totalVouchers;
     document.getElementById('stat-entries').textContent   = entries.length;
-    document.getElementById('stat-voided-count').textContent = voidedCount + ' voided';
+    const parts = [];
+    if (voidedCount)   parts.push(voidedCount + ' voided');
+    if (archivedCount) parts.push(archivedCount + ' archived');
+    if (deletedCount)  parts.push(deletedCount + ' deleted');
+    document.getElementById('stat-voided-count').textContent = parts.join(', ') || '0 inactive';
     document.getElementById('stat-avg').textContent       = '$' + avg.toFixed(2);
     document.getElementById('entry-count-header').textContent = entries.length + ' entries logged';
     document.getElementById('stat-voided-note').textContent =
@@ -774,7 +797,7 @@
   }
 
   function renderManagerBreakdown() {
-    const active = entries.filter(e => !e.voided);
+    const active = entries.filter(e => e.status === 'active');
     const byManager = {};
     active.forEach(e => {
       if (!byManager[e.manager]) byManager[e.manager] = { amount: 0, vouchers: 0, count: 0 };
@@ -804,10 +827,14 @@
 
   function renderTable() {
     const showVoided   = document.getElementById('show-voided').checked;
+    const showArchived = document.getElementById('show-archived').checked;
+    const showDeleted  = document.getElementById('show-deleted').checked;
     const filterMgr    = document.getElementById('filter-manager').value.trim().toLowerCase();
 
     let filtered = entries.filter(e => {
-      if (!showVoided && e.voided) return false;
+      if (!showVoided && e.status === 'voided') return false;
+      if (!showArchived && e.status === 'archived') return false;
+      if (!showDeleted && e.status === 'deleted') return false;
       if (filterMgr && !e.manager.toLowerCase().includes(filterMgr)) return false;
       return true;
     });
@@ -830,7 +857,11 @@
         ? `<div class="serial-pills">${e.serials.map(s => `<span class="serial-pill">${esc(s)}</span>`).join('')}</div>`
         : '<span style="color:var(--cream-dim)">—</span>';
 
-      return `<tr class="${e.voided ? 'voided' : ''}">
+      const rowClass = e.status !== 'active' ? e.status : '';
+      const isActive = e.status === 'active';
+      const restoreAction = e.status === 'voided' ? 'Void' : e.status === 'archived' ? 'Archive' : 'Delete';
+
+      return `<tr class="${rowClass}">
         <td>${dateStr}<br><small style="color:var(--cream-dim)">${timeStr}</small></td>
         <td>${serialsHtml}</td>
         <td>${esc(e.checkNumber)}</td>
@@ -838,10 +869,11 @@
         <td class="amount">$${e.amount.toFixed(2)}</td>
         <td><span style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;background:rgba(196,154,60,.12);border:1px solid rgba(196,154,60,.25);color:var(--brass-light);padding:2px 8px">${esc(e.manager)}</span></td>
         <td><div class="action-cell">
-          ${!e.voided ? `<button class="btn-sm btn-edit" onclick="openEdit('${e.id}')">Edit</button>` : ''}
-          ${e.voided
-            ? `<button class="btn-sm btn-restore" onclick="toggleVoid('${e.id}')">Restore</button>`
-            : `<button class="btn-sm btn-void" onclick="toggleVoid('${e.id}')">Void</button>`}
+          ${isActive ? `<button class="btn-sm btn-edit" onclick="openEdit('${e.id}')">Edit</button>` : ''}
+          ${isActive ? `<button class="btn-sm btn-void" onclick="toggleStatus('${e.id}','void')">Void</button>` : ''}
+          ${isActive ? `<button class="btn-sm btn-archive" onclick="toggleStatus('${e.id}','archive')">Archive</button>` : ''}
+          ${isActive ? `<button class="btn-sm btn-delete" onclick="toggleStatus('${e.id}','delete')">Delete</button>` : ''}
+          ${!isActive ? `<button class="btn-sm btn-restore" onclick="toggleStatus('${e.id}','${restoreAction.toLowerCase()}')">Restore</button>` : ''}
         </div></td>
       </tr>`;
     }).join('');
@@ -890,13 +922,14 @@
 
   function renderManagerSuggestions() {} // handled by populateInitialsSelects
 
-  async function toggleVoid(id) {
+  async function toggleStatus(id, action) {
     try {
-      const updated = await api('PATCH', `/entries/${id}/void`);
+      const updated = await api('PATCH', `/entries/${id}/${action}`);
       const idx = entries.findIndex(e => e.id === id);
       if (idx !== -1) entries[idx] = updated;
       renderAll();
-      toast(updated.voided ? 'Entry voided.' : 'Entry restored.');
+      const labels = { voided: 'Entry voided.', archived: 'Entry archived.', deleted: 'Entry deleted.', active: 'Entry restored.' };
+      toast(labels[updated.status] || 'Entry updated.');
     } catch (err) {
       toast(err.message, true);
     }
@@ -957,10 +990,13 @@
   // ── CSV EXPORT ────────────────────────────────
   function exportCSV() {
     const showVoided = document.getElementById('show-voided').checked;
-    const toExport = showVoided ? entries : entries.filter(e => !e.voided);
+    // Always exclude archived and deleted from export; voided only if checkbox is checked
+    const toExport = entries.filter(e =>
+      e.status !== 'archived' && e.status !== 'deleted' && (showVoided || e.status !== 'voided')
+    );
 
     const rows = [
-      ['Date', 'Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Initials', 'Voided'],
+      ['Date', 'Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Initials', 'Status'],
       ...toExport.map(e => {
         const dt = new Date(e.createdAt);
         return [
@@ -971,7 +1007,7 @@
           e.voucherCount,
           e.amount.toFixed(2),
           e.manager,
-          e.voided ? 'Yes' : 'No'
+          e.status
         ];
       })
     ];

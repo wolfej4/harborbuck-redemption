@@ -107,6 +107,14 @@ db.exec(`
     }
   }
 
+  // Add status column to entries and backfill from voided
+  const entryCols = db.prepare('PRAGMA table_info(entries)').all().map(r => r.name);
+  if (!entryCols.includes('status')) {
+    db.prepare("ALTER TABLE entries ADD COLUMN status TEXT NOT NULL DEFAULT 'active'").run();
+    db.prepare("UPDATE entries SET status = 'voided' WHERE voided = 1").run();
+    log('info', 'db.migration', { msg: 'Added column entries.status and backfilled from voided' });
+  }
+
   // Backfill initials for any users that have an empty string (from the migration default)
   // Use username as a fallback so the UNIQUE constraint doesn't block login
   const blankInitials = db.prepare("SELECT id, username FROM users WHERE initials = ''").all();
@@ -733,7 +741,7 @@ app.get('/api/admin/logs/download', requireAdmin, (req, res) => {
 function rowToEntry(r) {
   return { id: r.id, serials: JSON.parse(r.serials), checkNumber: r.check_number,
     voucherCount: r.voucher_count, amount: r.amount, manager: r.manager,
-    voided: r.voided === 1, createdAt: r.created_at };
+    voided: r.status === 'voided', status: r.status || 'active', createdAt: r.created_at };
 }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
@@ -751,8 +759,8 @@ app.post('/api/entries', requireAuth, (req, res) => {
   if (!manager)                                 return res.status(400).json({ error: 'Manager initials required.' });
   try {
     const e = { id: uid(), serials: JSON.stringify(serials), check_number: checkNumber,
-      voucher_count: voucherCount, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), voided: 0, created_at: Date.now() };
-    db.prepare('INSERT INTO entries (id,serials,check_number,voucher_count,amount,manager,voided,created_at) VALUES (@id,@serials,@check_number,@voucher_count,@amount,@manager,@voided,@created_at)').run(e);
+      voucher_count: voucherCount, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), voided: 0, status: 'active', created_at: Date.now() };
+    db.prepare('INSERT INTO entries (id,serials,check_number,voucher_count,amount,manager,voided,status,created_at) VALUES (@id,@serials,@check_number,@voucher_count,@amount,@manager,@voided,@status,@created_at)').run(e);
     const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
     log('info', 'entry.created', { user: username, manager, checkNumber, amount: parseFloat(amount), serials });
     res.status(201).json(rowToEntry(e));
@@ -779,12 +787,41 @@ app.patch('/api/entries/:id/void', requireAuth, (req, res) => {
   try {
     const row = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
     if (!row) return res.status(404).json({ error: 'Entry not found.' });
-    db.prepare('UPDATE entries SET voided=? WHERE id=?').run(row.voided ? 0 : 1, id);
+    const newStatus = row.status === 'voided' ? 'active' : 'voided';
+    db.prepare('UPDATE entries SET voided=?, status=? WHERE id=?').run(newStatus === 'voided' ? 1 : 0, newStatus, id);
     const updated  = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
     const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
-    log('warn', updated.voided ? 'entry.voided' : 'entry.restored', { user: username, entryId: id, checkNumber: row.check_number, amount: row.amount });
+    log('warn', newStatus === 'voided' ? 'entry.voided' : 'entry.restored', { user: username, entryId: id, checkNumber: row.check_number, amount: row.amount });
     res.json(rowToEntry(updated));
   } catch(e) { log('error', 'entry.void_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to toggle void.' }); }
+});
+
+app.patch('/api/entries/:id/archive', requireAuth, (req, res) => {
+  const { id } = req.params;
+  try {
+    const row = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
+    if (!row) return res.status(404).json({ error: 'Entry not found.' });
+    const newStatus = row.status === 'archived' ? 'active' : 'archived';
+    db.prepare('UPDATE entries SET voided=0, status=? WHERE id=?').run(newStatus, id);
+    const updated  = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
+    const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
+    log('warn', newStatus === 'archived' ? 'entry.archived' : 'entry.restored', { user: username, entryId: id, checkNumber: row.check_number, amount: row.amount });
+    res.json(rowToEntry(updated));
+  } catch(e) { log('error', 'entry.archive_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to toggle archive.' }); }
+});
+
+app.patch('/api/entries/:id/delete', requireAuth, (req, res) => {
+  const { id } = req.params;
+  try {
+    const row = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
+    if (!row) return res.status(404).json({ error: 'Entry not found.' });
+    const newStatus = row.status === 'deleted' ? 'active' : 'deleted';
+    db.prepare('UPDATE entries SET voided=0, status=? WHERE id=?').run(newStatus, id);
+    const updated  = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
+    const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
+    log('warn', newStatus === 'deleted' ? 'entry.deleted' : 'entry.restored', { user: username, entryId: id, checkNumber: row.check_number, amount: row.amount });
+    res.json(rowToEntry(updated));
+  } catch(e) { log('error', 'entry.delete_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to toggle delete.' }); }
 });
 
 // ── START ──────────────────────────────────────
