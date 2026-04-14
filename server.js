@@ -168,6 +168,30 @@ async function sendEmail({ to, subject, text, html }) {
   await t.sendMail({ from: cfg.from || cfg.user, to, subject, text, html });
 }
 
+function emailTemplate(heading, bodyHtml, footerText) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#0c1a2e;font-family:'Helvetica Neue',Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0c1a2e;padding:40px 20px">
+<tr><td align="center">
+  <table width="480" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%">
+    <tr><td align="center" style="padding-bottom:28px">
+      <span style="font-family:Georgia,'Times New Roman',serif;font-size:28px;font-weight:bold;color:#e0b84a;letter-spacing:0.03em">&#9875; Harborbucks</span>
+    </td></tr>
+    <tr><td style="background:#132238;border:1px solid rgba(196,154,60,0.25);border-top:3px solid #c49a3c;padding:32px 36px">
+      <h1 style="margin:0 0 20px;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:bold;color:#e0b84a;letter-spacing:0.04em">${heading}</h1>
+      <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:1.6;color:#f0e8d8">
+        ${bodyHtml}
+      </div>
+    </td></tr>
+    <tr><td align="center" style="padding-top:24px">
+      <span style="font-family:'Courier New',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#8a6a20">${footerText || 'Harborbucks — Internal Use Only'}</span>
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body></html>`;
+}
+
 // ── MIDDLEWARE ─────────────────────────────────
 app.set('trust proxy', 1);
 app.use(express.json());
@@ -372,7 +396,12 @@ app.post('/auth/login', async (req, res) => {
       try {
         await sendEmail({ to: user.email, subject: 'Harborbucks — Login Code',
           text:  `Your Harborbucks login code is: ${code}\n\nExpires in 10 minutes.`,
-          html:  `<p>Your login code is: <strong style="font-size:1.4em">${code}</strong></p><p>Expires in 10 minutes.</p>` });
+          html:  emailTemplate('Login Verification', `
+            <p>Enter this code to complete your sign-in:</p>
+            <div style="text-align:center;margin:24px 0">
+              <span style="font-family:'Courier New',monospace;font-size:32px;font-weight:bold;letter-spacing:0.3em;color:#e0b84a;background:#0c1a2e;padding:14px 28px;border:1px solid rgba(196,154,60,0.3)">${code}</span>
+            </div>
+            <p style="color:#b8ad99;font-size:13px">This code expires in 10 minutes. If you didn't request this, you can safely ignore it.</p>`) });
         log('info', 'auth.login.mfa_pending', { user: user.username, mfa: 'email', ip: ip(req) });
         return res.json({ redirect: '/mfa' });
       } catch(e) {
@@ -436,8 +465,13 @@ app.post('/auth/mfa/resend', async (req, res) => {
   req.session.emailCode = { hash: codeHash, expiresAt: Date.now() + 10*60*1000 };
   try {
     await sendEmail({ to: user.email, subject: 'Harborbucks — New Login Code',
-      text:  `Your new code is: ${code}\n\nExpires in 10 minutes.`,
-      html:  `<p>Your new code is: <strong style="font-size:1.4em">${code}</strong></p><p>Expires in 10 minutes.</p>` });
+      text:  `Your new Harborbucks login code is: ${code}\n\nExpires in 10 minutes.`,
+      html:  emailTemplate('New Login Code', `
+        <p>Here is your new verification code:</p>
+        <div style="text-align:center;margin:24px 0">
+          <span style="font-family:'Courier New',monospace;font-size:32px;font-weight:bold;letter-spacing:0.3em;color:#e0b84a;background:#0c1a2e;padding:14px 28px;border:1px solid rgba(196,154,60,0.3)">${code}</span>
+        </div>
+        <p style="color:#b8ad99;font-size:13px">This code expires in 10 minutes. If you didn't request this, you can safely ignore it.</p>`) });
     log('info', 'auth.mfa.resend', { user: user.username, ip: ip(req) });
     res.json({ ok: true });
   } catch(e) {
@@ -488,8 +522,14 @@ app.post('/auth/reset-request', async (req, res) => {
   const resetUrl = `${req.protocol}://${req.get('host')}/reset-confirm?token=${token}`;
   try {
     await sendEmail({ to: user.email, subject: 'Harborbucks — Password Reset',
-      text:  `Reset your password: ${resetUrl}\n\nExpires in 1 hour.`,
-      html:  `<p>Click to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Expires in 1 hour.</p>` });
+      text:  `Reset your Harborbucks password: ${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
+      html:  emailTemplate('Password Reset', `
+        <p>A password reset was requested for your account. Click the button below to set a new password:</p>
+        <div style="text-align:center;margin:28px 0">
+          <a href="${resetUrl}" style="display:inline-block;font-family:'Courier New',monospace;font-size:13px;font-weight:bold;letter-spacing:0.1em;text-transform:uppercase;color:#0c1a2e;background:#c49a3c;padding:14px 32px;text-decoration:none">Reset Password</a>
+        </div>
+        <p style="color:#b8ad99;font-size:13px">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
+        <p style="color:#b8ad99;font-size:11px;word-break:break-all;margin-top:16px;padding-top:16px;border-top:1px solid rgba(196,154,60,0.15)">${resetUrl}</p>`) });
     log('info', 'auth.password_reset.requested', { user: user.username, ip: ip(req) });
     res.json({ ok: true });
   } catch(e) {
@@ -711,7 +751,11 @@ app.post('/api/admin/settings/test-smtp', requireAdmin, async (req, res) => {
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid recipient email address is required.' });
   const u = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId);
   try {
-    await sendEmail({ to: email, subject: 'Harborbucks — SMTP Test', text: 'SMTP is working correctly.', html: '<p>SMTP is working correctly.</p>' });
+    await sendEmail({ to: email, subject: 'Harborbucks — SMTP Test',
+      text: 'SMTP is working correctly. Your Harborbucks email configuration is active.',
+      html: emailTemplate('SMTP Test', `
+        <p>Your email configuration is working correctly.</p>
+        <p style="color:#b8ad99;font-size:13px">This is a test message from your Harborbucks admin panel. No action is required.</p>`) });
     log('info', 'admin.smtp.test_ok', { admin: u?.username, to: email });
     res.json({ ok: true });
   } catch(e) {
