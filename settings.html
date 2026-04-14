@@ -295,7 +295,7 @@ function updateMfaNote() {
   const selected = document.querySelector('input[name="mfa"]:checked')?.value;
   const note = document.getElementById('mfa-note');
   if (selected === 'totp' && currentUser?.mfa_type !== 'totp') {
-    note.textContent = 'You'll be asked to scan a QR code after saving.';
+    note.textContent = "You'll be asked to scan a QR code after saving.";
   } else if (selected === currentUser?.mfa_type) {
     note.textContent = 'No change.';
   } else {
