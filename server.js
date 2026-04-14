@@ -253,18 +253,32 @@ app.get('/api/public-config', (_req, res) => {
 // ── AUTH: SETUP (first run) ────────────────────
 app.post('/auth/setup', async (req, res) => {
   if (hasUsers()) return res.status(403).json({ error: 'Setup already complete.' });
-  const { username, email, password, confirmPassword, initials, mfaType } = req.body;
+  const { username, email, password, confirmPassword, initials, mfaType, smtp } = req.body;
   if (!username || !password)          return res.status(400).json({ error: 'Username and password required.' });
   if (password !== confirmPassword)    return res.status(400).json({ error: 'Passwords do not match.' });
   if (password.length < 8)             return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   if (!initials || !/^[A-Za-z0-9]{2,4}$/.test(initials)) return res.status(400).json({ error: 'Initials must be 2–4 alphanumeric characters.' });
-  const chosenMfa = ['none','totp'].includes(mfaType) ? mfaType : 'none';
+
+  // Save SMTP config if provided (before user creation so email MFA is valid)
+  if (smtp?.host) {
+    setConfig('smtp_config', JSON.stringify({
+      host: smtp.host, port: smtp.port || 587, user: smtp.user || '',
+      pass: smtp.pass || '', from: smtp.from || '', secure: smtp.secure || false,
+    }));
+    log('info', 'auth.setup.smtp_configured', { host: smtp.host });
+  }
+
+  const smtpOk = !!getSmtpConfig()?.host;
+  const allowed = smtpOk ? ['none','totp','email'] : ['none','totp'];
+  const chosenMfa = allowed.includes(mfaType) ? mfaType : 'none';
+  if (chosenMfa === 'email' && !email?.trim()) return res.status(400).json({ error: 'Email address is required for email MFA.' });
+
   try {
     const hash = await bcrypt.hash(password, 12);
     db.prepare('INSERT INTO users (username,email,password_hash,initials,role,mfa_type,created_at) VALUES (?,?,?,?,?,?,?)')
       .run(username.trim().toLowerCase(), email?.trim()||null, hash, initials.toUpperCase(), 'admin', chosenMfa, Date.now());
     const user = db.prepare('SELECT * FROM users WHERE username=?').get(username.trim().toLowerCase());
-    log('info', 'auth.setup', { user: user.username, initials: user.initials, ip: ip(req) });
+    log('info', 'auth.setup', { user: user.username, initials: user.initials, mfa: chosenMfa, ip: ip(req) });
     req.session.regenerate(err => {
       if (err) return res.status(500).json({ error: 'Session error.' });
       req.session.userId = user.id; req.session.userRole = 'admin';
