@@ -1,0 +1,12 @@
+{
+  "name": "lost-items-log",
+  "version": "1.0.0",
+  "description": "Restaurant lost items log — track credit cards, IDs, and other items left behind",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "express": "^4.18.3",
+    "express-session": "^1.18.0"
+  }
+}

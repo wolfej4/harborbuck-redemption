@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lost Items Log</title>
+<style>
+:root {
+  --navy: #0c1a2e; --navy-mid: #132238; --navy-light: #1a3050;
+  --brass: #c49a3c; --brass-light: #e0b84a; --brass-dim: #8a6a20;
+  --cream: #f0e8d8; --cream-dim: #b8ad99;
+  --red: #c0392b; --red-dim: #7d241b;
+  --green: #2e7d52; --green-light: #80d4aa;
+  --orange: #e89850;
+  --rule: rgba(196,154,60,0.25);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--navy);
+  background-image: repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(196,154,60,.06) 39px, rgba(196,154,60,.06) 40px);
+  color: var(--cream); font-family: -apple-system, 'Segoe UI', sans-serif; min-height: 100vh;
+}
+
+/* ── HEADER ─────────────────────────── */
+header {
+  border-bottom: 2px solid var(--brass); padding: 20px 28px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  background: linear-gradient(180deg, rgba(196,154,60,.08) 0%, transparent 100%);
+}
+.logo { font-size: 1.4rem; font-weight: 800; color: var(--brass-light); letter-spacing: .03em; }
+.logo span { display: block; font-size: .65rem; font-weight: 400; color: var(--brass-dim); letter-spacing: .14em; text-transform: uppercase; margin-top: 2px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.header-right a { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--brass-dim); text-decoration: none; }
+.header-right a:hover { color: var(--brass); }
+
+/* ── LAYOUT ─────────────────────────── */
+.wrap { max-width: 1000px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* ── STATS ROW ──────────────────────── */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.stat {
+  background: var(--navy-mid); border: 1px solid var(--rule); padding: 16px 18px;
+  border-top: 3px solid var(--brass-dim);
+}
+.stat .label { font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; color: var(--brass-dim); margin-bottom: 4px; }
+.stat .value { font-size: 1.6rem; font-weight: 700; color: var(--cream); }
+.stat .value.warn { color: var(--orange); }
+.stat .value.good { color: var(--green-light); }
+
+/* ── SECTION TITLE ──────────────────── */
+.section-title {
+  font-size: .7rem; letter-spacing: .18em; text-transform: uppercase; color: var(--brass);
+  border-bottom: 1px solid var(--rule); padding-bottom: 10px; margin-bottom: 16px; margin-top: 8px;
+}
+
+/* ── FORM ───────────────────────────── */
+.form-card {
+  background: var(--navy-mid); border: 1px solid var(--rule); border-left: 4px solid var(--brass);
+  padding: 22px 24px; margin-bottom: 28px;
+}
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field.full { grid-column: 1 / -1; }
+label { font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--brass-dim); }
+input, select, textarea {
+  background: var(--navy-light); border: 1px solid var(--rule); border-bottom: 2px solid var(--brass-dim);
+  color: var(--cream); font-family: inherit; font-size: .88rem; padding: 9px 11px; outline: none; width: 100%;
+  transition: border-color .15s;
+}
+input::placeholder, textarea::placeholder { color: rgba(176,166,148,.35); }
+input:focus, select:focus, textarea:focus { border-bottom-color: var(--brass-light); background: rgba(26,48,80,.8); }
+select option { background: var(--navy-mid); }
+textarea { resize: vertical; min-height: 60px; }
+.form-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* ── BUTTONS ────────────────────────── */
+.btn {
+  font-size: .76rem; letter-spacing: .08em; text-transform: uppercase;
+  padding: 10px 18px; border: none; cursor: pointer; transition: all .15s; font-family: inherit;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary { background: var(--brass); color: var(--navy); font-weight: 600; }
+.btn-primary:hover:not(:disabled) { background: var(--brass-light); }
+.btn-ghost { background: transparent; color: var(--cream-dim); border: 1px solid var(--rule); }
+.btn-ghost:hover { border-color: var(--brass-dim); color: var(--cream); }
+.btn-sm {
+  font-size: .6rem; letter-spacing: .06em; text-transform: uppercase;
+  padding: 4px 9px; border: none; cursor: pointer; font-family: inherit; transition: all .12s;
+}
+.btn-return { background: rgba(46,125,82,.18); color: var(--green-light); border: 1px solid rgba(46,125,82,.3); }
+.btn-return:hover { background: rgba(46,125,82,.32); }
+.btn-dispose { background: rgba(230,126,34,.12); color: var(--orange); border: 1px solid rgba(230,126,34,.25); }
+.btn-dispose:hover { background: rgba(230,126,34,.25); }
+.btn-reopen { background: rgba(196,154,60,.12); color: var(--brass); border: 1px solid rgba(196,154,60,.25); }
+.btn-reopen:hover { background: rgba(196,154,60,.22); }
+.btn-edit { background: rgba(176,166,148,.08); color: var(--cream-dim); border: 1px solid rgba(176,166,148,.2); }
+.btn-edit:hover { background: rgba(176,166,148,.15); color: var(--cream); }
+.btn-del { background: rgba(192,57,43,.12); color: #e08080; border: 1px solid rgba(192,57,43,.25); }
+.btn-del:hover { background: rgba(192,57,43,.28); }
+
+/* ── FILTERS ────────────────────────── */
+.filters {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;
+}
+.filters select, .filters input {
+  font-size: .8rem; padding: 7px 10px; max-width: 200px;
+}
+.result-count { font-size: .7rem; color: var(--cream-dim); margin-left: auto; }
+
+/* ── ITEM CARDS ─────────────────────── */
+.items-list { display: flex; flex-direction: column; gap: 10px; }
+.item-card {
+  background: var(--navy-mid); border: 1px solid var(--rule); padding: 16px 20px;
+  display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: start;
+  transition: background .1s;
+}
+.item-card:hover { background: rgba(196,154,60,.03); }
+.item-card.returned { border-left: 3px solid var(--green); opacity: .7; }
+.item-card.disposed { border-left: 3px solid var(--cream-dim); opacity: .55; }
+.item-card.unclaimed { border-left: 3px solid var(--brass); }
+.item-card.aging { border-left: 3px solid var(--orange); }
+
+.item-icon { font-size: 1.5rem; line-height: 1; padding-top: 2px; }
+.item-body { min-width: 0; }
+.item-desc { font-size: .92rem; font-weight: 600; color: var(--cream); margin-bottom: 4px; word-break: break-word; }
+.item-meta { font-size: .72rem; color: var(--cream-dim); line-height: 1.6; }
+.item-meta strong { color: var(--cream); font-weight: 500; }
+.item-status {
+  font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; padding: 2px 8px;
+  display: inline-block; margin-bottom: 6px; border: 1px solid;
+}
+.item-status.unclaimed { color: var(--brass); background: rgba(196,154,60,.12); border-color: rgba(196,154,60,.3); }
+.item-status.returned { color: var(--green-light); background: rgba(46,125,82,.12); border-color: rgba(46,125,82,.3); }
+.item-status.disposed { color: var(--cream-dim); background: rgba(176,166,148,.06); border-color: rgba(176,166,148,.2); }
+.item-status.aging { color: var(--orange); background: rgba(230,126,34,.1); border-color: rgba(230,126,34,.25); }
+
+.item-age { font-size: .65rem; color: var(--cream-dim); }
+.item-age.old { color: var(--orange); }
+.item-actions { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+.no-data { text-align: center; padding: 40px 20px; color: var(--cream-dim); font-size: .85rem; }
+
+/* ── MODAL ──────────────────────────── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--navy-mid); border: 1px solid var(--rule); border-top: 3px solid var(--brass);
+  padding: 28px 32px; width: 100%; max-width: 420px; margin: 20px;
+}
+.modal h3 { font-size: 1rem; font-weight: 700; color: var(--brass-light); margin-bottom: 18px; }
+.modal .field { margin-bottom: 14px; }
+.modal .form-actions { margin-top: 18px; }
+
+/* ── TOAST ──────────────────────────── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--navy-mid); border: 1px solid var(--rule); color: var(--cream);
+  font-size: .82rem; padding: 10px 22px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 200;
+}
+.toast.show { opacity: 1; }
+.toast.success { border-color: rgba(46,125,82,.5); color: var(--green-light); }
+.toast.error { border-color: rgba(192,57,43,.5); color: #e08080; }
+
+/* ── RESPONSIVE ─────────────────────── */
+@media (max-width: 600px) {
+  header { padding: 16px 16px; }
+  .wrap { padding: 16px 12px 40px; }
+  .item-card { grid-template-columns: 1fr; gap: 8px; }
+  .item-icon { display: none; }
+  .item-actions { flex-direction: row; flex-wrap: wrap; }
+  .form-grid { grid-template-columns: 1fr; }
+  .filters { flex-direction: column; align-items: stretch; }
+  .filters select, .filters input { max-width: none; }
+  .result-count { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Lost Items Log<span>Restaurant Found-Item Tracker</span></div>
+  <div class="header-right">
+    <a href="/auth/logout">Sign Out</a>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat"><div class="label">Unclaimed</div><div class="value" id="stat-unclaimed">-</div></div>
+    <div class="stat"><div class="label">Returned</div><div class="value good" id="stat-returned">-</div></div>
+    <div class="stat"><div class="label">Disposed</div><div class="value" id="stat-disposed">-</div></div>
+    <div class="stat"><div class="label">30+ Days Old</div><div class="value warn" id="stat-aging">-</div></div>
+  </div>
+
+  <!-- LOG NEW ITEM -->
+  <div class="section-title">Log Found Item</div>
+  <div class="form-card">
+    <div class="form-grid">
+      <div class="field">
+        <label for="f-type">Item Type</label>
+        <select id="f-type">
+          <option value="credit_card">Credit Card</option>
+          <option value="debit_card">Debit Card</option>
+          <option value="drivers_license">Driver's License</option>
+          <option value="state_id">State ID</option>
+          <option value="passport">Passport</option>
+          <option value="phone">Phone</option>
+          <option value="wallet">Wallet</option>
+          <option value="keys">Keys</option>
+          <option value="glasses">Glasses</option>
+          <option value="jewelry">Jewelry</option>
+          <option value="clothing">Clothing</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="f-location">Where Found</label>
+        <input id="f-location" type="text" placeholder="Table 12, bar, patio...">
+      </div>
+      <div class="field">
+        <label for="f-found-by">Found By (Initials)</label>
+        <input id="f-found-by" type="text" placeholder="JD" maxlength="4">
+      </div>
+      <div class="field">
+        <label for="f-date">Date Found</label>
+        <input id="f-date" type="datetime-local">
+      </div>
+      <div class="field full">
+        <label for="f-desc">Description</label>
+        <input id="f-desc" type="text" placeholder="Visa ending 4821, name on card, blue wallet, etc.">
+      </div>
+      <div class="field">
+        <label for="f-cname">Customer Name (if known)</label>
+        <input id="f-cname" type="text" placeholder="Optional">
+      </div>
+      <div class="field">
+        <label for="f-cphone">Customer Phone (if known)</label>
+        <input id="f-cphone" type="tel" placeholder="Optional">
+      </div>
+      <div class="field full">
+        <label for="f-notes">Notes</label>
+        <textarea id="f-notes" placeholder="Optional — any extra details"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="createItem()">Log Item</button>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="section-title">Item Log</div>
+  <div class="filters">
+    <select id="fl-status" onchange="loadItems()">
+      <option value="all">All Statuses</option>
+      <option value="unclaimed" selected>Unclaimed</option>
+      <option value="returned">Returned</option>
+      <option value="disposed">Disposed</option>
+    </select>
+    <select id="fl-type" onchange="loadItems()">
+      <option value="all">All Types</option>
+      <option value="credit_card">Credit Card</option>
+      <option value="debit_card">Debit Card</option>
+      <option value="drivers_license">Driver's License</option>
+      <option value="state_id">State ID</option>
+      <option value="passport">Passport</option>
+      <option value="phone">Phone</option>
+      <option value="wallet">Wallet</option>
+      <option value="keys">Keys</option>
+      <option value="glasses">Glasses</option>
+      <option value="jewelry">Jewelry</option>
+      <option value="clothing">Clothing</option>
+      <option value="other">Other</option>
+    </select>
+    <input id="fl-search" type="text" placeholder="Search..." oninput="debouncedSearch()">
+    <span class="result-count" id="result-count"></span>
+  </div>
+
+  <!-- ITEMS LIST -->
+  <div class="items-list" id="items-list">
+    <div class="no-data">Loading...</div>
+  </div>
+</div>
+
+<!-- RETURN MODAL -->
+<div class="modal-overlay" id="modal-return" onclick="if(event.target===this)closeModal('modal-return')">
+  <div class="modal">
+    <h3>Mark as Returned</h3>
+    <div class="field">
+      <label for="mr-to">Returned To (Name)</label>
+      <input id="mr-to" type="text" placeholder="Customer name">
+    </div>
+    <div class="field">
+      <label for="mr-by">Handled By (Your Initials)</label>
+      <input id="mr-by" type="text" placeholder="JD" maxlength="4">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="confirmReturn()">Confirm Return</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-return')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="modal-edit" onclick="if(event.target===this)closeModal('modal-edit')">
+  <div class="modal">
+    <h3>Edit Item</h3>
+    <div class="field">
+      <label for="me-type">Item Type</label>
+      <select id="me-type">
+        <option value="credit_card">Credit Card</option>
+        <option value="debit_card">Debit Card</option>
+        <option value="drivers_license">Driver's License</option>
+        <option value="state_id">State ID</option>
+        <option value="passport">Passport</option>
+        <option value="phone">Phone</option>
+        <option value="wallet">Wallet</option>
+        <option value="keys">Keys</option>
+        <option value="glasses">Glasses</option>
+        <option value="jewelry">Jewelry</option>
+        <option value="clothing">Clothing</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="me-desc">Description</label>
+      <input id="me-desc" type="text">
+    </div>
+    <div class="field">
+      <label for="me-location">Where Found</label>
+      <input id="me-location" type="text">
+    </div>
+    <div class="field">
+      <label for="me-found-by">Found By</label>
+      <input id="me-found-by" type="text" maxlength="4">
+    </div>
+    <div class="field">
+      <label for="me-cname">Customer Name</label>
+      <input id="me-cname" type="text">
+    </div>
+    <div class="field">
+      <label for="me-cphone">Customer Phone</label>
+      <input id="me-cphone" type="tel">
+    </div>
+    <div class="field">
+      <label for="me-notes">Notes</label>
+      <textarea id="me-notes"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="confirmEdit()">Save Changes</button>
+      <button class="btn btn-ghost" onclick="closeModal('modal-edit')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let items = [];
+let returnItemId = null;
+let editItemId = null;
+let searchTimer = null;
+
+const TYPE_ICONS = {
+  credit_card: '\uD83D\uDCB3', debit_card: '\uD83D\uDCB3', drivers_license: '\uD83E\uDEAA',
+  state_id: '\uD83E\uDEAA', passport: '\uD83D\uDEC2', phone: '\uD83D\uDCF1',
+  wallet: '\uD83D\uDC5B', keys: '\uD83D\uDD11', glasses: '\uD83D\uDC53',
+  jewelry: '\uD83D\uDC8D', clothing: '\uD83E\uDDE5', other: '\uD83D\uDCE6'
+};
+const TYPE_LABELS = {
+  credit_card: 'Credit Card', debit_card: 'Debit Card', drivers_license: "Driver's License",
+  state_id: 'State ID', passport: 'Passport', phone: 'Phone',
+  wallet: 'Wallet', keys: 'Keys', glasses: 'Glasses',
+  jewelry: 'Jewelry', clothing: 'Clothing', other: 'Other'
+};
+
+// ── INIT ──────────────────────────────
+async function init() {
+  // Set default date to now
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('f-date').value = now.toISOString().slice(0, 16);
+
+  await Promise.all([loadStats(), loadItems()]);
+}
+
+// ── STATS ─────────────────────────────
+async function loadStats() {
+  try {
+    const res = await fetch('/api/lost-items/stats');
+    const s = await res.json();
+    document.getElementById('stat-unclaimed').textContent = s.unclaimed;
+    document.getElementById('stat-returned').textContent = s.returned;
+    document.getElementById('stat-disposed').textContent = s.disposed;
+    document.getElementById('stat-aging').textContent = s.aging;
+  } catch {}
+}
+
+// ── LOAD ITEMS ────────────────────────
+async function loadItems() {
+  const status = document.getElementById('fl-status').value;
+  const type = document.getElementById('fl-type').value;
+  const search = document.getElementById('fl-search').value.trim();
+
+  const params = new URLSearchParams();
+  if (status !== 'all') params.set('status', status);
+  if (type !== 'all') params.set('type', type);
+  if (search) params.set('search', search);
+
+  try {
+    const res = await fetch('/api/lost-items?' + params);
+    items = await res.json();
+    renderItems();
+  } catch {
+    document.getElementById('items-list').innerHTML = '<div class="no-data" style="color:#e08080">Failed to load items.</div>';
+  }
+}
+
+function debouncedSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadItems, 300);
+}
+
+// ── RENDER ────────────────────────────
+function renderItems() {
+  const list = document.getElementById('items-list');
+  document.getElementById('result-count').textContent = items.length ? items.length + ' item' + (items.length === 1 ? '' : 's') : '';
+
+  if (!items.length) {
+    list.innerHTML = '<div class="no-data">No items found.</div>';
+    return;
+  }
+
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  list.innerHTML = items.map(item => {
+    const isAging = item.status === 'unclaimed' && (now - item.found_at) > thirtyDaysMs;
+    const statusClass = isAging ? 'aging' : item.status;
+    const icon = TYPE_ICONS[item.item_type] || '\uD83D\uDCE6';
+    const typeLabel = TYPE_LABELS[item.item_type] || item.item_type;
+    const foundDate = new Date(item.found_at);
+    const age = ageSince(item.found_at);
+    const ageClass = (now - item.found_at) > thirtyDaysMs ? 'old' : '';
+
+    let metaHtml = `<strong>${esc(typeLabel)}</strong>`;
+    if (item.found_location) metaHtml += ` &middot; Found at <strong>${esc(item.found_location)}</strong>`;
+    metaHtml += ` &middot; By <strong>${esc(item.found_by)}</strong>`;
+    metaHtml += ` &middot; ${foundDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ${foundDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+
+    if (item.customer_name) metaHtml += `<br>Customer: <strong>${esc(item.customer_name)}</strong>`;
+    if (item.customer_phone) metaHtml += ` &middot; ${esc(item.customer_phone)}`;
+
+    if (item.status === 'returned') {
+      const rd = new Date(item.returned_at);
+      metaHtml += `<br>Returned to <strong>${esc(item.returned_to)}</strong> by <strong>${esc(item.returned_by)}</strong> on ${rd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+    if (item.notes) metaHtml += `<br><em style="color:var(--cream-dim)">${esc(item.notes)}</em>`;
+
+    // Status label
+    const statusLabel = isAging ? `Unclaimed ${age}` : item.status === 'returned' ? 'Returned' : item.status === 'disposed' ? 'Disposed' : 'Unclaimed';
+
+    // Action buttons
+    let actions = '';
+    if (item.status === 'unclaimed') {
+      actions += `<button class="btn-sm btn-return" onclick="openReturn('${item.id}')">Return</button>`;
+      actions += `<button class="btn-sm btn-edit" onclick="openEdit('${item.id}')">Edit</button>`;
+      actions += `<button class="btn-sm btn-dispose" onclick="disposeItem('${item.id}')">Dispose</button>`;
+    } else {
+      actions += `<button class="btn-sm btn-reopen" onclick="reopenItem('${item.id}')">Reopen</button>`;
+    }
+    actions += `<button class="btn-sm btn-del" onclick="deleteItem('${item.id}')">Delete</button>`;
+
+    return `<div class="item-card ${statusClass}">
+      <div class="item-icon">${icon}</div>
+      <div class="item-body">
+        <span class="item-status ${statusClass}">${esc(statusLabel)}</span>
+        <div class="item-desc">${esc(item.description)}</div>
+        <div class="item-meta">${metaHtml}</div>
+      </div>
+      <div class="item-actions">${actions}</div>
+    </div>`;
+  }).join('');
+}
+
+function ageSince(ts) {
+  const diff = Date.now() - ts;
+  const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+  if (days === 0) return 'today';
+  if (days === 1) return '1 day';
+  if (days < 30) return days + ' days';
+  const months = Math.floor(days / 30);
+  return months === 1 ? '1 month' : months + ' months';
+}
+
+// ── CREATE ────────────────────────────
+async function createItem() {
+  const itemType = document.getElementById('f-type').value;
+  const description = document.getElementById('f-desc').value.trim();
+  const foundLocation = document.getElementById('f-location').value.trim();
+  const foundBy = document.getElementById('f-found-by').value.trim();
+  const dateVal = document.getElementById('f-date').value;
+  const customerName = document.getElementById('f-cname').value.trim();
+  const customerPhone = document.getElementById('f-cphone').value.trim();
+  const notes = document.getElementById('f-notes').value.trim();
+
+  if (!description) return toast('Description is required.', 'error');
+  if (!foundBy) return toast('Found-by initials are required.', 'error');
+
+  const foundAt = dateVal ? new Date(dateVal).getTime() : Date.now();
+
+  try {
+    const res = await fetch('/api/lost-items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemType, description, foundLocation, foundBy, foundAt, customerName, customerPhone, notes })
+    });
+    if (!res.ok) { const d = await res.json(); return toast(d.error || 'Failed.', 'error'); }
+    // Reset form
+    document.getElementById('f-desc').value = '';
+    document.getElementById('f-location').value = '';
+    document.getElementById('f-cname').value = '';
+    document.getElementById('f-cphone').value = '';
+    document.getElementById('f-notes').value = '';
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('f-date').value = now.toISOString().slice(0, 16);
+
+    toast('Item logged.', 'success');
+    await Promise.all([loadItems(), loadStats()]);
+  } catch { toast('Network error.', 'error'); }
+}
+
+// ── RETURN ────────────────────────────
+function openReturn(id) {
+  returnItemId = id;
+  document.getElementById('mr-to').value = '';
+  document.getElementById('mr-by').value = '';
+  document.getElementById('modal-return').classList.add('open');
+  setTimeout(() => document.getElementById('mr-to').focus(), 50);
+}
+
+async function confirmReturn() {
+  const returnedTo = document.getElementById('mr-to').value.trim();
+  const returnedBy = document.getElementById('mr-by').value.trim();
+  if (!returnedTo) return toast('Customer name is required.', 'error');
+  if (!returnedBy) return toast('Your initials are required.', 'error');
+  try {
+    const res = await fetch(`/api/lost-items/${returnItemId}/return`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ returnedTo, returnedBy })
+    });
+    if (!res.ok) { const d = await res.json(); return toast(d.error || 'Failed.', 'error'); }
+    closeModal('modal-return');
+    toast('Item marked as returned.', 'success');
+    await Promise.all([loadItems(), loadStats()]);
+  } catch { toast('Network error.', 'error'); }
+}
+
+// ── EDIT ──────────────────────────────
+function openEdit(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  editItemId = id;
+  document.getElementById('me-type').value = item.item_type;
+  document.getElementById('me-desc').value = item.description;
+  document.getElementById('me-location').value = item.found_location || '';
+  document.getElementById('me-found-by').value = item.found_by;
+  document.getElementById('me-cname').value = item.customer_name || '';
+  document.getElementById('me-cphone').value = item.customer_phone || '';
+  document.getElementById('me-notes').value = item.notes || '';
+  document.getElementById('modal-edit').classList.add('open');
+  setTimeout(() => document.getElementById('me-desc').focus(), 50);
+}
+
+async function confirmEdit() {
+  const item = items.find(i => i.id === editItemId);
+  if (!item) return;
+  const body = {
+    itemType: document.getElementById('me-type').value,
+    description: document.getElementById('me-desc').value.trim(),
+    foundLocation: document.getElementById('me-location').value.trim(),
+    foundBy: document.getElementById('me-found-by').value.trim(),
+    foundAt: item.found_at,
+    customerName: document.getElementById('me-cname').value.trim(),
+    customerPhone: document.getElementById('me-cphone').value.trim(),
+    notes: document.getElementById('me-notes').value.trim(),
+  };
+  if (!body.description) return toast('Description required.', 'error');
+  if (!body.foundBy) return toast('Found-by required.', 'error');
+  try {
+    const res = await fetch(`/api/lost-items/${editItemId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) { const d = await res.json(); return toast(d.error || 'Failed.', 'error'); }
+    closeModal('modal-edit');
+    toast('Item updated.', 'success');
+    await loadItems();
+  } catch { toast('Network error.', 'error'); }
+}
+
+// ── DISPOSE ───────────────────────────
+async function disposeItem(id) {
+  if (!confirm('Mark this item as disposed? This means it will no longer be held.')) return;
+  try {
+    const res = await fetch(`/api/lost-items/${id}/dispose`, { method: 'PATCH' });
+    if (!res.ok) { const d = await res.json(); return toast(d.error || 'Failed.', 'error'); }
+    toast('Item disposed.', 'success');
+    await Promise.all([loadItems(), loadStats()]);
+  } catch { toast('Network error.', 'error'); }
+}
+
+// ── REOPEN ────────────────────────────
+async function reopenItem(id) {
+  if (!confirm('Move this item back to unclaimed?')) return;
+  try {
+    const res = await fetch(`/api/lost-items/${id}/reopen`, { method: 'PATCH' });
+    if (!res.ok) { const d = await res.json(); return toast(d.error || 'Failed.', 'error'); }
+    toast('Item reopened.', 'success');
+    await Promise.all([loadItems(), loadStats()]);
+  } catch { toast('Network error.', 'error'); }
+}
+
+// ── DELETE ────────────────────────────
+async function deleteItem(id) {
+  if (!confirm('Permanently delete this record? This cannot be undone.')) return;
+  try {
+    const res = await fetch(`/api/lost-items/${id}`, { method: 'DELETE' });
+    if (!res.ok) { const d = await res.json(); return toast(d.error || 'Failed.', 'error'); }
+    toast('Item deleted.', 'success');
+    await Promise.all([loadItems(), loadStats()]);
+  } catch { toast('Network error.', 'error'); }
+}
+
+// ── HELPERS ───────────────────────────
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast show ${type}`;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+init();
+</script>
+</body>
+</html>

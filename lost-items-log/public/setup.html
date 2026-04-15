@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lost Items Log — Setup</title>
+<style>
+  :root { --navy:#0c1a2e; --navy-mid:#132238; --navy-light:#1a3050; --brass:#c49a3c; --brass-light:#e0b84a; --brass-dim:#8a6a20; --cream:#f0e8d8; --cream-dim:#b8ad99; --red:#c0392b; --rule:rgba(196,154,60,0.25); }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--navy); color: var(--cream); font-family: -apple-system, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .card { background: var(--navy-mid); border: 1px solid var(--rule); border-top: 3px solid var(--brass); padding: 40px 36px; width: 100%; max-width: 380px; margin: 20px; }
+  h1 { font-size: 1.5rem; font-weight: 700; color: var(--brass-light); margin-bottom: 6px; }
+  .sub { font-size: .82rem; color: var(--cream-dim); margin-bottom: 28px; line-height: 1.5; }
+  label { display: block; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--brass-dim); margin-bottom: 6px; }
+  input { width: 100%; background: var(--navy-light); border: 1px solid var(--rule); border-bottom: 2px solid var(--brass-dim); color: var(--cream); font-size: 1.1rem; padding: 12px 14px; outline: none; letter-spacing: .15em; text-align: center; margin-bottom: 8px; }
+  input:focus { border-bottom-color: var(--brass-light); }
+  .hint { font-size: .72rem; color: var(--cream-dim); margin-bottom: 20px; }
+  button { width: 100%; background: var(--brass); color: var(--navy); font-size: .85rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; padding: 12px; border: none; cursor: pointer; }
+  button:hover { background: var(--brass-light); }
+  .error { font-size: .8rem; color: var(--red); margin-bottom: 14px; min-height: 1.2em; text-align: center; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>First-Time Setup</h1>
+  <p class="sub">Choose a shared PIN your staff will use to access the lost items log.</p>
+  <form id="form" onsubmit="return setup(event)">
+    <label for="pin">Staff PIN</label>
+    <input id="pin" type="password" placeholder="Choose a PIN" autofocus autocomplete="off">
+    <p class="hint">At least 4 characters. Share this with your team.</p>
+    <label for="confirm">Confirm PIN</label>
+    <input id="confirm" type="password" placeholder="Confirm" autocomplete="off">
+    <div class="error" id="error"></div>
+    <button type="submit">Set PIN &amp; Continue</button>
+  </form>
+</div>
+<script>
+async function setup(e) {
+  e.preventDefault();
+  const pin = document.getElementById('pin').value;
+  const confirm = document.getElementById('confirm').value;
+  const errEl = document.getElementById('error');
+  errEl.textContent = '';
+  if (pin.length < 4) { errEl.textContent = 'PIN must be at least 4 characters.'; return false; }
+  if (pin !== confirm) { errEl.textContent = 'PINs do not match.'; return false; }
+  try {
+    const res = await fetch('/auth/setup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin })
+    });
+    const d = await res.json();
+    if (!res.ok) { errEl.textContent = d.error || 'Setup failed.'; return false; }
+    window.location.href = '/';
+  } catch { errEl.textContent = 'Network error.'; }
+  return false;
+}
+</script>
+</body>
+</html>
