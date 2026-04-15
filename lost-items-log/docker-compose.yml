@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  lost-items-log:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - lost-items-data:/data
+    environment:
+      - DB_PATH=/data/lost-items.db
+    restart: unless-stopped
+
+volumes:
+  lost-items-data:
