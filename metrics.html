@@ -1,0 +1,327 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Harborbucks — Metrics</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0c1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0c1a2e;--navy-mid:#132238;--navy-light:#1a3050;--brass:#c49a3c;--brass-light:#e0b84a;--brass-dim:#8a6a20;--cream:#f0e8d8;--cream-dim:#b8ad99;--red:#c0392b;--green:#2e7d52;--rule:rgba(196,154,60,0.25)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--navy);background-image:repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(196,154,60,.06) 39px,rgba(196,154,60,.06) 40px);min-height:100vh;font-family:'IBM Plex Mono',monospace;color:var(--cream)}
+
+header{border-bottom:2px solid var(--brass);padding:24px 40px 20px;display:flex;align-items:flex-end;justify-content:space-between;background:linear-gradient(180deg,rgba(196,154,60,.08) 0%,transparent 100%)}
+.logo{display:flex;align-items:baseline;gap:14px}
+.logo a{text-decoration:none;color:inherit}
+.logo h1{font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:900;color:var(--brass-light);letter-spacing:.03em}
+.logo span{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--brass-dim)}
+.header-nav{display:flex;gap:14px}
+.header-nav a{font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:var(--brass-dim);text-decoration:none;font-family:'IBM Plex Mono',monospace}
+.header-nav a:hover{color:var(--brass)}
+
+.app-wrap{max-width:1200px;margin:0 auto;padding:32px 40px 60px}
+
+.controls{display:flex;gap:16px;align-items:center;margin-bottom:28px;flex-wrap:wrap}
+.controls label{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--brass-dim)}
+.controls select{background:var(--navy-light);border:1px solid var(--rule);border-bottom:2px solid var(--brass-dim);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.78rem;padding:8px 32px 8px 10px;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238a6a20'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.controls select:focus{border-bottom-color:var(--brass-light)}
+
+.summary-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px}
+.stat-card{background:var(--navy-mid);border:1px solid var(--rule);border-top:3px solid var(--brass);padding:18px 20px}
+.stat-card .label{font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--brass-dim);margin-bottom:6px}
+.stat-card .value{font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--brass-light);font-weight:700}
+.stat-card .sub{font-size:.65rem;color:var(--cream-dim);margin-top:4px}
+
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:24px;margin-bottom:28px}
+.chart-card{background:var(--navy-mid);border:1px solid var(--rule);border-left:4px solid var(--brass);padding:24px 24px 16px}
+.chart-title{font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--brass);border-bottom:1px solid var(--rule);padding-bottom:10px;margin-bottom:16px}
+.chart-wrap{position:relative;width:100%;height:280px}
+.chart-card.tall .chart-wrap{height:340px}
+
+.empty-msg{text-align:center;padding:60px 20px;color:var(--cream-dim);font-size:.85rem}
+.empty-msg .icon{font-size:2.4rem;margin-bottom:12px}
+
+@media(max-width:600px){
+  header{flex-direction:column;align-items:flex-start;gap:12px;padding:16px 20px}
+  .app-wrap{padding:20px 16px 40px}
+  .chart-grid{grid-template-columns:1fr}
+  .summary-row{grid-template-columns:repeat(2,1fr)}
+}
+</style></head><body>
+
+<header>
+  <div class="logo">
+    <a href="/"><h1>⚓ Harborbucks</h1></a>
+    <span>Metrics</span>
+  </div>
+  <div class="header-nav">
+    <a href="/">← Back to Ledger</a>
+    <a href="/admin" id="admin-link" style="display:none">Admin ↗</a>
+    <a href="/auth/logout">Sign Out</a>
+  </div>
+</header>
+
+<div class="app-wrap">
+
+  <div class="controls">
+    <div>
+      <label for="range-select">Time Range</label><br>
+      <select id="range-select" onchange="refresh()">
+        <option value="7">Last 7 Days</option>
+        <option value="30" selected>Last 30 Days</option>
+        <option value="90">Last 90 Days</option>
+        <option value="365">Last Year</option>
+        <option value="0">All Time</option>
+      </select>
+    </div>
+    <div>
+      <label for="dept-filter">Department</label><br>
+      <select id="dept-filter" onchange="refresh()">
+        <option value="">All</option>
+        <option value="Food & Beverage">Food & Beverage</option>
+        <option value="Retail">Retail</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="summary-row">
+    <div class="stat-card"><div class="label">Total Redeemed</div><div class="value" id="s-amount">$0.00</div><div class="sub" id="s-amount-sub"></div></div>
+    <div class="stat-card"><div class="label">Entries</div><div class="value" id="s-entries">0</div><div class="sub" id="s-entries-sub"></div></div>
+    <div class="stat-card"><div class="label">Vouchers</div><div class="value" id="s-vouchers">0</div><div class="sub">total units</div></div>
+    <div class="stat-card"><div class="label">Avg per Entry</div><div class="value" id="s-avg">$0.00</div><div class="sub" id="s-avg-sub"></div></div>
+  </div>
+
+  <div id="charts-area">
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-title">Redemptions Over Time</div><div class="chart-wrap"><canvas id="chart-timeline"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Amount Over Time</div><div class="chart-wrap"><canvas id="chart-amount"></canvas></div></div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card"><div class="chart-title">By Department</div><div class="chart-wrap"><canvas id="chart-dept"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">By Manager</div><div class="chart-wrap"><canvas id="chart-manager"></canvas></div></div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card tall"><div class="chart-title">Top Managers by Amount</div><div class="chart-wrap"><canvas id="chart-manager-bar"></canvas></div></div>
+      <div class="chart-card tall"><div class="chart-title">Daily Volume Heatmap</div><div class="chart-wrap"><canvas id="chart-weekday"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="empty-msg" id="empty-state" style="display:none">
+    <div class="icon">⚓</div>
+    <div>No entries found for this time range.</div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+const BRASS='#c49a3c', BRASS_LIGHT='#e0b84a', BRASS_DIM='#8a6a20', CREAM='#f0e8d8', CREAM_DIM='#b8ad99', NAVY_LIGHT='#1a3050', GREEN='#2e7d52', RED='#c0392b';
+const PALETTE=['#c49a3c','#e0b84a','#3da66e','#5b8fb9','#e67e22','#9b59b6','#1abc9c','#e74c3c','#2ecc71','#f39c12'];
+
+Chart.defaults.color = CREAM_DIM;
+Chart.defaults.borderColor = 'rgba(196,154,60,0.15)';
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 11;
+
+let allEntries = [];
+let charts = {};
+
+async function init() {
+  try {
+    const res = await fetch('/api/entries');
+    if (res.status === 401) return window.location.href = '/login';
+    allEntries = await res.json();
+  } catch(e) { return; }
+
+  const me = await fetch('/api/me').then(r => r.json()).catch(() => null);
+  if (me?.role === 'admin') document.getElementById('admin-link').style.display = '';
+
+  refresh();
+}
+
+function refresh() {
+  const days = parseInt(document.getElementById('range-select').value);
+  const dept = document.getElementById('dept-filter').value;
+  const now = Date.now();
+  const cutoff = days > 0 ? now - days * 86400000 : 0;
+
+  const filtered = allEntries.filter(e => {
+    if (e.status !== 'active') return false;
+    if (e.createdAt < cutoff) return false;
+    if (dept && e.department !== dept) return false;
+    return true;
+  });
+
+  const empty = document.getElementById('empty-state');
+  const area = document.getElementById('charts-area');
+  if (!filtered.length) { empty.style.display = ''; area.style.display = 'none'; updateSummary([]); return; }
+  empty.style.display = 'none'; area.style.display = '';
+
+  updateSummary(filtered);
+  renderTimeline(filtered, days);
+  renderAmountTimeline(filtered, days);
+  renderDeptChart(filtered);
+  renderManagerPie(filtered);
+  renderManagerBar(filtered);
+  renderWeekday(filtered);
+}
+
+function updateSummary(data) {
+  const totalAmt = data.reduce((s, e) => s + e.amount, 0);
+  const totalVouchers = data.reduce((s, e) => s + e.voucherCount, 0);
+  const avg = data.length ? totalAmt / data.length : 0;
+
+  document.getElementById('s-amount').textContent = '$' + totalAmt.toFixed(2);
+  document.getElementById('s-entries').textContent = data.length;
+  document.getElementById('s-vouchers').textContent = totalVouchers;
+  document.getElementById('s-avg').textContent = '$' + avg.toFixed(2);
+  document.getElementById('s-amount-sub').textContent = data.length + ' entries';
+  document.getElementById('s-avg-sub').textContent = totalVouchers ? '$' + (totalAmt / totalVouchers).toFixed(2) + '/voucher' : '';
+}
+
+function bucketByDate(data, days) {
+  const map = {};
+  const fmt = days > 90 ? 'month' : 'day';
+  data.forEach(e => {
+    const d = new Date(e.createdAt);
+    const key = fmt === 'month'
+      ? d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
+      : d.toISOString().slice(0,10);
+    if (!map[key]) map[key] = { count: 0, amount: 0, vouchers: 0 };
+    map[key].count++;
+    map[key].amount += e.amount;
+    map[key].vouchers += e.voucherCount;
+  });
+
+  const now = new Date();
+  if (fmt === 'day') {
+    const start = days > 0 ? new Date(Date.now() - days * 86400000) : new Date(Math.min(...data.map(e => e.createdAt)));
+    for (let d = new Date(start); d <= now; d.setDate(d.getDate()+1)) {
+      const key = d.toISOString().slice(0,10);
+      if (!map[key]) map[key] = { count: 0, amount: 0, vouchers: 0 };
+    }
+  }
+
+  const sorted = Object.keys(map).sort();
+  return { labels: sorted.map(k => formatLabel(k, fmt)), keys: sorted, data: sorted.map(k => map[k]) };
+}
+
+function formatLabel(key, fmt) {
+  if (fmt === 'month') {
+    const [y, m] = key.split('-');
+    return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1] + ' ' + y.slice(2);
+  }
+  const d = new Date(key + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function makeOrUpdate(id, config) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), config);
+}
+
+function renderTimeline(data, days) {
+  const b = bucketByDate(data, days);
+  makeOrUpdate('chart-timeline', {
+    type: 'bar',
+    data: { labels: b.labels, datasets: [{ label: 'Entries', data: b.data.map(d => d.count), backgroundColor: 'rgba(196,154,60,0.5)', borderColor: BRASS, borderWidth: 1, borderRadius: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+}
+
+function renderAmountTimeline(data, days) {
+  const b = bucketByDate(data, days);
+  makeOrUpdate('chart-amount', {
+    type: 'line',
+    data: { labels: b.labels, datasets: [{ label: 'Amount ($)', data: b.data.map(d => d.amount), borderColor: BRASS_LIGHT, backgroundColor: 'rgba(224,184,74,0.1)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: BRASS_LIGHT }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { callback: v => '$' + v } } } }
+  });
+}
+
+function renderDeptChart(data) {
+  const map = {};
+  data.forEach(e => {
+    const dept = e.department || 'Unset';
+    if (!map[dept]) map[dept] = { amount: 0, count: 0 };
+    map[dept].amount += e.amount;
+    map[dept].count++;
+  });
+  const labels = Object.keys(map);
+  const amounts = labels.map(l => map[l].amount);
+  const colors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
+
+  makeOrUpdate('chart-dept', {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: amounts, backgroundColor: colors, borderColor: '#132238', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'rect' } }, tooltip: { callbacks: { label: ctx => ctx.label + ': $' + ctx.parsed.toFixed(2) + ' (' + map[ctx.label].count + ' entries)' } } } }
+  });
+}
+
+function renderManagerPie(data) {
+  const map = {};
+  data.forEach(e => {
+    if (!map[e.manager]) map[e.manager] = { amount: 0, count: 0 };
+    map[e.manager].amount += e.amount;
+    map[e.manager].count++;
+  });
+  const sorted = Object.keys(map).sort((a, b) => map[b].amount - map[a].amount);
+  const labels = sorted.slice(0, 8);
+  if (sorted.length > 8) labels.push('Other');
+  const amounts = labels.map((l, i) => {
+    if (l === 'Other') return sorted.slice(8).reduce((s, k) => s + map[k].amount, 0);
+    return map[l].amount;
+  });
+  const colors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
+
+  makeOrUpdate('chart-manager', {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: amounts, backgroundColor: colors, borderColor: '#132238', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'rect' } }, tooltip: { callbacks: { label: ctx => { const l = ctx.label; const a = ctx.parsed; return l + ': $' + a.toFixed(2); } } } } }
+  });
+}
+
+function renderManagerBar(data) {
+  const map = {};
+  data.forEach(e => {
+    if (!map[e.manager]) map[e.manager] = 0;
+    map[e.manager] += e.amount;
+  });
+  const sorted = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const labels = sorted.map(s => s[0]);
+  const amounts = sorted.map(s => s[1]);
+
+  makeOrUpdate('chart-manager-bar', {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Amount ($)', data: amounts, backgroundColor: 'rgba(196,154,60,0.5)', borderColor: BRASS, borderWidth: 1, borderRadius: 2 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { callback: v => '$' + v } }, y: { grid: { display: false } } } }
+  });
+}
+
+function renderWeekday(data) {
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const counts = [0,0,0,0,0,0,0];
+  const amounts = [0,0,0,0,0,0,0];
+  data.forEach(e => {
+    const day = new Date(e.createdAt).getDay();
+    counts[day]++;
+    amounts[day] += e.amount;
+  });
+
+  makeOrUpdate('chart-weekday', {
+    type: 'bar',
+    data: { labels: dayNames, datasets: [
+      { label: 'Entries', data: counts, backgroundColor: 'rgba(196,154,60,0.5)', borderColor: BRASS, borderWidth: 1, borderRadius: 2, yAxisID: 'y' },
+      { label: 'Amount ($)', data: amounts, type: 'line', borderColor: BRASS_LIGHT, backgroundColor: 'transparent', tension: 0.3, pointRadius: 4, pointBackgroundColor: BRASS_LIGHT, yAxisID: 'y1' }
+    ] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { padding: 16, usePointStyle: true } } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, position: 'left', title: { display: true, text: 'Entries', color: CREAM_DIM }, ticks: { stepSize: 1 } }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Amount', color: CREAM_DIM }, ticks: { callback: v => '$' + v } } } }
+  });
+}
+
+init();
+</script>
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');</script>
+</body></html>

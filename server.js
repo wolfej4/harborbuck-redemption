@@ -260,6 +260,7 @@ app.get('/icon-maskable.svg', (_req, res) => { res.setHeader('Content-Type', 'im
 
 // ── HTML ROUTES ────────────────────────────────
 app.get('/',             requireAuth,  (_req, res) => page(res, 'index.html'));
+app.get('/metrics',      requireAuth,  (_req, res) => page(res, 'metrics.html'));
 app.get('/admin',        requireAdmin, (_req, res) => page(res, 'admin.html'));
 app.get('/settings',     requireAuth,  (_req, res) => page(res, 'settings.html'));
 app.get('/login',        (req, res) => { if (req.session?.authenticated) return res.redirect('/'); if (!hasUsers()) return res.redirect('/setup'); page(res, 'login.html'); });

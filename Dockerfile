@@ -11,7 +11,7 @@ RUN npm install --production
 COPY server.js ./
 COPY index.html login.html setup.html register.html \
      mfa.html mfa-setup.html admin.html settings.html \
-     reset-request.html reset-confirm.html \
+     metrics.html reset-request.html reset-confirm.html \
      manifest.json sw.js icon.svg icon-maskable.svg \
      ./public/
 
