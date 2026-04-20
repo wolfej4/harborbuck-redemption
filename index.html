@@ -512,6 +512,14 @@
         <input id="f-amount" type="number" min="0" step="0.01" placeholder="0.00" autocomplete="off">
       </div>
       <div class="field-group">
+        <label for="f-department">Department</label>
+        <select id="f-department">
+          <option value="">— select —</option>
+          <option value="Food & Beverage">Food & Beverage</option>
+          <option value="Retail">Retail</option>
+        </select>
+      </div>
+      <div class="field-group">
         <label for="f-manager">Manager Initials</label>
         <select id="f-manager"><option value="">— select —</option></select>
       </div>
@@ -543,6 +551,7 @@
           <th>Check #</th>
           <th># Vouchers</th>
           <th>Amount</th>
+          <th>Department</th>
           <th>Initials</th>
           <th>Actions</th>
         </tr>
@@ -583,6 +592,14 @@
       <div class="field-group">
         <label for="e-amount">Amount ($)</label>
         <input id="e-amount" type="number" min="0" step="0.01" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label for="e-department">Department</label>
+        <select id="e-department">
+          <option value="">— select —</option>
+          <option value="Food & Beverage">Food & Beverage</option>
+          <option value="Retail">Retail</option>
+        </select>
       </div>
       <div class="field-group">
         <label for="e-manager">Manager Initials</label>
@@ -844,6 +861,7 @@
         <td>${esc(e.checkNumber)}</td>
         <td>${e.voucherCount}</td>
         <td class="amount">$${e.amount.toFixed(2)}</td>
+        <td>${esc(e.department || '—')}</td>
         <td><span style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;background:rgba(196,154,60,.12);border:1px solid rgba(196,154,60,.25);color:var(--brass-light);padding:2px 8px">${esc(e.manager)}</span></td>
         <td><div class="action-cell">
           ${isActive ? `<button class="btn-sm btn-edit" onclick="openEdit('${e.id}')">Edit</button>` : ''}
@@ -864,18 +882,20 @@
     const checkNumber  = val('f-check');
     const voucherCount = parseInt(val('f-count'));
     const amount       = parseFloat(val('f-amount'));
+    const department   = document.getElementById('f-department').value;
     const manager      = document.getElementById('f-manager').value;
 
     if (!serials.length) return toast('At least one serial number is required.', true);
     if (!checkNumber) return toast('Check number is required.', true);
     if (!voucherCount || voucherCount < 1) return toast('Enter a valid voucher count.', true);
     if (isNaN(amount) || amount < 0) return toast('Enter a valid amount.', true);
+    if (!department) return toast('Select a department.', true);
     if (!manager) return toast('Select manager initials.', true);
 
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
     try {
-      const entry = await api('POST', '/entries', { serials, checkNumber, voucherCount, amount, manager });
+      const entry = await api('POST', '/entries', { serials, checkNumber, voucherCount, amount, department, manager });
       entries.unshift(entry);
       clearForm();
       renderAll();
@@ -889,6 +909,7 @@
 
   function clearForm() {
     ['f-check','f-count','f-amount'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('f-department').value = '';
     document.getElementById('f-manager').value = myInitials;
     const warn = document.getElementById('serial-dupe-warn');
     if (warn) warn.style.display = 'none';
@@ -932,6 +953,7 @@
     document.getElementById('e-check').value  = e.checkNumber;
     document.getElementById('e-count').value  = e.voucherCount;
     document.getElementById('e-amount').value = e.amount;
+    document.getElementById('e-department').value = e.department || '';
     document.getElementById('e-manager').value = e.manager;
     document.getElementById('edit-modal').classList.add('open');
     setTimeout(() => document.getElementById('e-serial-input').focus(), 50);
@@ -952,16 +974,17 @@
     const checkNumber  = document.getElementById('e-check').value.trim();
     const voucherCount = parseInt(document.getElementById('e-count').value);
     const amount       = parseFloat(document.getElementById('e-amount').value);
+    const department   = document.getElementById('e-department').value;
     const manager      = document.getElementById('e-manager').value;
 
     if (!serials.length) return toast('At least one serial number is required.', true);
-    if (!checkNumber || !voucherCount || isNaN(amount) || !manager)
+    if (!checkNumber || !voucherCount || isNaN(amount) || !department || !manager)
       return toast('All fields are required.', true);
 
     const btn = document.getElementById('save-btn');
     btn.disabled = true;
     try {
-      const updated = await api('PUT', `/entries/${editingId}`, { serials, checkNumber, voucherCount, amount, manager });
+      const updated = await api('PUT', `/entries/${editingId}`, { serials, checkNumber, voucherCount, amount, department, manager });
       const idx = entries.findIndex(e => e.id === editingId);
       if (idx !== -1) entries[idx] = updated;
       closeModal();
@@ -980,7 +1003,7 @@
     const toExport = entries.filter(e => e.status !== 'archived');
 
     const rows = [
-      ['Date', 'Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Initials'],
+      ['Date', 'Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Department', 'Initials'],
       ...toExport.map(e => {
         const dt = new Date(e.createdAt);
         return [
@@ -990,6 +1013,7 @@
           e.checkNumber,
           e.voucherCount,
           e.amount.toFixed(2),
+          e.department || '',
           e.manager
         ];
       })
