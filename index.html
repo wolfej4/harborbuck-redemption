@@ -319,7 +319,8 @@
   .filter-input {
     background: var(--navy-mid); border: 1px solid var(--rule);
     color: var(--cream); font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.78rem; padding: 7px 12px; outline: none; width: 160px;
+    font-size: 0.78rem; padding: 7px 12px; outline: none; width: 150px;
+    color-scheme: dark;
   }
 
   .filter-input:focus { border-color: var(--brass-dim); }
@@ -540,7 +541,9 @@
     <div class="table-header-row">
       <div class="section-title" style="margin-bottom:0;border:none;padding:0;">Ledger</div>
       <div class="filter-row">
-        <input class="filter-input" id="filter-manager" placeholder="Filter by initials…" oninput="renderTable()">
+        <input class="filter-input" id="filter-date-from" type="date" title="From date" onchange="renderTable()">
+        <span style="color:var(--cream-dim);font-size:.7rem;align-self:center">to</span>
+        <input class="filter-input" id="filter-date-to" type="date" title="To date" onchange="renderTable()">
         <label class="void-toggle">
           <input type="checkbox" id="show-archived" onchange="renderTable()">
           Show archived
@@ -836,11 +839,14 @@
 
   function renderTable() {
     const showArchived = document.getElementById('show-archived').checked;
-    const filterMgr    = document.getElementById('filter-manager').value.trim().toLowerCase();
+    const dateFrom     = document.getElementById('filter-date-from').value;
+    const dateTo       = document.getElementById('filter-date-to').value;
 
     let filtered = entries.filter(e => {
       if (!showArchived && e.status === 'archived') return false;
-      if (filterMgr && !e.manager.toLowerCase().includes(filterMgr)) return false;
+      const td = e.transactionDate || '';
+      if (dateFrom && td < dateFrom) return false;
+      if (dateTo && td > dateTo) return false;
       return true;
     });
 
