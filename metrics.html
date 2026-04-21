@@ -91,8 +91,8 @@ header{border-bottom:2px solid var(--brass);padding:24px 40px 20px;display:flex;
   <div class="summary-row">
     <div class="stat-card"><div class="label">Total Redeemed</div><div class="value" id="s-amount">$0.00</div><div class="sub" id="s-amount-sub"></div></div>
     <div class="stat-card"><div class="label">Entries</div><div class="value" id="s-entries">0</div><div class="sub" id="s-entries-sub"></div></div>
-    <div class="stat-card"><div class="label">Vouchers</div><div class="value" id="s-vouchers">0</div><div class="sub">total units</div></div>
-    <div class="stat-card"><div class="label">Avg per Entry</div><div class="value" id="s-avg">$0.00</div><div class="sub" id="s-avg-sub"></div></div>
+    <div class="stat-card"><div class="label">Vouchers</div><div class="value" id="s-vouchers">0</div><div class="sub" id="s-vouchers-sub">total units</div></div>
+    <div class="stat-card"><div class="label">Voucher Face Value</div><div class="value" id="s-facevalue">$0.00</div><div class="sub" id="s-facevalue-sub"></div></div>
   </div>
 
   <div id="charts-area">
@@ -176,14 +176,16 @@ function refresh() {
 function updateSummary(data) {
   const totalAmt = data.reduce((s, e) => s + e.amount, 0);
   const totalVouchers = data.reduce((s, e) => s + e.voucherCount, 0);
-  const avg = data.length ? totalAmt / data.length : 0;
+  const faceValue = totalVouchers * 25;
+  const breakage = Math.max(0, faceValue - totalAmt);
 
   document.getElementById('s-amount').textContent = '$' + totalAmt.toFixed(2);
   document.getElementById('s-entries').textContent = data.length;
   document.getElementById('s-vouchers').textContent = totalVouchers;
-  document.getElementById('s-avg').textContent = '$' + avg.toFixed(2);
+  document.getElementById('s-facevalue').textContent = '$' + faceValue.toFixed(2);
   document.getElementById('s-amount-sub').textContent = data.length + ' entries';
-  document.getElementById('s-avg-sub').textContent = totalVouchers ? '$' + (totalAmt / totalVouchers).toFixed(2) + '/voucher' : '';
+  document.getElementById('s-vouchers-sub').textContent = '@ $25 each';
+  document.getElementById('s-facevalue-sub').textContent = breakage > 0 ? '$' + breakage.toFixed(2) + ' unredeemed' : 'fully redeemed';
 }
 
 function txDateStr(e) {
