@@ -540,6 +540,7 @@
         <input class="filter-input" id="filter-date-from" type="date" title="From date" onchange="renderTable()">
         <span style="color:var(--cream-dim);font-size:.7rem;align-self:center">to</span>
         <input class="filter-input" id="filter-date-to" type="date" title="To date" onchange="renderTable()">
+        <button class="btn btn-sm btn-ghost" onclick="document.getElementById('filter-date-from').value='';document.getElementById('filter-date-to').value='';renderTable()">Reset</button>
         <label class="void-toggle">
           <input type="checkbox" id="show-archived" onchange="renderTable()">
           Show archived
