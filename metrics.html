@@ -101,10 +101,6 @@ header{border-bottom:2px solid var(--brass);padding:24px 40px 20px;display:flex;
       <div class="chart-card"><div class="chart-title">Amount Over Time</div><div class="chart-wrap"><canvas id="chart-amount"></canvas></div></div>
     </div>
     <div class="chart-grid">
-      <div class="chart-card"><div class="chart-title">By Department</div><div class="chart-wrap"><canvas id="chart-dept"></canvas></div></div>
-      <div class="chart-card"><div class="chart-title">By Manager</div><div class="chart-wrap"><canvas id="chart-manager"></canvas></div></div>
-    </div>
-    <div class="chart-grid">
       <div class="chart-card tall"><div class="chart-title">Top Managers by Amount</div><div class="chart-wrap"><canvas id="chart-manager-bar"></canvas></div></div>
       <div class="chart-card tall"><div class="chart-title">Daily Volume Heatmap</div><div class="chart-wrap"><canvas id="chart-weekday"></canvas></div></div>
     </div>
@@ -167,8 +163,6 @@ function refresh() {
   updateSummary(filtered);
   renderTimeline(filtered, days);
   renderAmountTimeline(filtered, days);
-  renderDeptChart(filtered);
-  renderManagerPie(filtered);
   renderManagerBar(filtered);
   renderWeekday(filtered);
 }
@@ -249,48 +243,6 @@ function renderAmountTimeline(data, days) {
     type: 'line',
     data: { labels: b.labels, datasets: [{ label: 'Amount ($)', data: b.data.map(d => d.amount), borderColor: BRASS_LIGHT, backgroundColor: 'rgba(224,184,74,0.1)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: BRASS_LIGHT }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { callback: v => '$' + v } } } }
-  });
-}
-
-function renderDeptChart(data) {
-  const map = {};
-  data.forEach(e => {
-    const dept = e.department || 'Unset';
-    if (!map[dept]) map[dept] = { amount: 0, count: 0 };
-    map[dept].amount += e.amount;
-    map[dept].count++;
-  });
-  const labels = Object.keys(map);
-  const amounts = labels.map(l => map[l].amount);
-  const colors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
-
-  makeOrUpdate('chart-dept', {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data: amounts, backgroundColor: colors, borderColor: '#132238', borderWidth: 2 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'rect' } }, tooltip: { callbacks: { label: ctx => ctx.label + ': $' + ctx.parsed.toFixed(2) + ' (' + map[ctx.label].count + ' entries)' } } } }
-  });
-}
-
-function renderManagerPie(data) {
-  const map = {};
-  data.forEach(e => {
-    if (!map[e.manager]) map[e.manager] = { amount: 0, count: 0 };
-    map[e.manager].amount += e.amount;
-    map[e.manager].count++;
-  });
-  const sorted = Object.keys(map).sort((a, b) => map[b].amount - map[a].amount);
-  const labels = sorted.slice(0, 8);
-  if (sorted.length > 8) labels.push('Other');
-  const amounts = labels.map((l, i) => {
-    if (l === 'Other') return sorted.slice(8).reduce((s, k) => s + map[k].amount, 0);
-    return map[l].amount;
-  });
-  const colors = labels.map((_, i) => PALETTE[i % PALETTE.length]);
-
-  makeOrUpdate('chart-manager', {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data: amounts, backgroundColor: colors, borderColor: '#132238', borderWidth: 2 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'rect' } }, tooltip: { callbacks: { label: ctx => { const l = ctx.label; const a = ctx.parsed; return l + ': $' + a.toFixed(2); } } } } }
   });
 }
 
