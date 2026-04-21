@@ -510,10 +510,6 @@
         <input id="f-check" type="text" placeholder="e.g. 10247" autocomplete="off">
       </div>
       <div class="field-group">
-        <label for="f-count">Number of Vouchers</label>
-        <input id="f-count" type="number" min="1" placeholder="1" autocomplete="off">
-      </div>
-      <div class="field-group">
         <label for="f-amount">Amount ($)</label>
         <input id="f-amount" type="number" min="0" step="0.01" placeholder="0.00" autocomplete="off">
       </div>
@@ -596,10 +592,6 @@
       <div class="field-group">
         <label for="e-check">Check Number</label>
         <input id="e-check" type="text" autocomplete="off">
-      </div>
-      <div class="field-group">
-        <label for="e-count">Number of Vouchers</label>
-        <input id="e-count" type="number" min="1" autocomplete="off">
       </div>
       <div class="field-group">
         <label for="e-amount">Amount ($)</label>
@@ -898,7 +890,6 @@
     const serials         = tagState['form'];
     const transactionDate = val('f-date');
     const checkNumber     = val('f-check');
-    const voucherCount    = parseInt(val('f-count'));
     const amount          = parseFloat(val('f-amount'));
     const department      = document.getElementById('f-department').value;
     const manager         = document.getElementById('f-manager').value;
@@ -906,7 +897,6 @@
     if (!serials.length) return toast('At least one serial number is required.', true);
     if (!transactionDate) return toast('Transaction date is required.', true);
     if (!checkNumber) return toast('Check number is required.', true);
-    if (!voucherCount || voucherCount < 1) return toast('Enter a valid voucher count.', true);
     if (isNaN(amount) || amount < 0) return toast('Enter a valid amount.', true);
     if (!department) return toast('Select a department.', true);
     if (!manager) return toast('Select manager initials.', true);
@@ -914,7 +904,7 @@
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
     try {
-      const entry = await api('POST', '/entries', { serials, transactionDate, checkNumber, voucherCount, amount, department, manager });
+      const entry = await api('POST', '/entries', { serials, transactionDate, checkNumber, amount, department, manager });
       entries.unshift(entry);
       clearForm();
       renderAll();
@@ -927,7 +917,7 @@
   }
 
   function clearForm() {
-    ['f-check','f-count','f-amount'].forEach(id => { document.getElementById(id).value = ''; });
+    ['f-check','f-amount'].forEach(id => { document.getElementById(id).value = ''; });
     document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
     document.getElementById('f-department').value = '';
     document.getElementById('f-manager').value = myInitials;
@@ -972,7 +962,6 @@
     renderTags('edit');
     document.getElementById('e-date').value   = e.transactionDate || '';
     document.getElementById('e-check').value  = e.checkNumber;
-    document.getElementById('e-count').value  = e.voucherCount;
     document.getElementById('e-amount').value = e.amount;
     document.getElementById('e-department').value = e.department || '';
     document.getElementById('e-manager').value = e.manager;
@@ -994,19 +983,18 @@
     const serials         = tagState['edit'];
     const transactionDate = document.getElementById('e-date').value;
     const checkNumber     = document.getElementById('e-check').value.trim();
-    const voucherCount    = parseInt(document.getElementById('e-count').value);
     const amount          = parseFloat(document.getElementById('e-amount').value);
     const department      = document.getElementById('e-department').value;
     const manager         = document.getElementById('e-manager').value;
 
     if (!serials.length) return toast('At least one serial number is required.', true);
-    if (!transactionDate || !checkNumber || !voucherCount || isNaN(amount) || !department || !manager)
+    if (!transactionDate || !checkNumber || isNaN(amount) || !department || !manager)
       return toast('All fields are required.', true);
 
     const btn = document.getElementById('save-btn');
     btn.disabled = true;
     try {
-      const updated = await api('PUT', `/entries/${editingId}`, { serials, transactionDate, checkNumber, voucherCount, amount, department, manager });
+      const updated = await api('PUT', `/entries/${editingId}`, { serials, transactionDate, checkNumber, amount, department, manager });
       const idx = entries.findIndex(e => e.id === editingId);
       if (idx !== -1) entries[idx] = updated;
       closeModal();

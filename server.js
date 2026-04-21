@@ -827,17 +827,16 @@ app.get('/api/entries', requireAuth, (_req, res) => {
 });
 
 app.post('/api/entries', requireAuth, (req, res) => {
-  const { serials, checkNumber, voucherCount, amount, manager, department, transactionDate } = req.body;
+  const { serials, checkNumber, amount, manager, department, transactionDate } = req.body;
   if (!Array.isArray(serials)||!serials.length) return res.status(400).json({ error: 'At least one serial required.' });
   if (!checkNumber)                             return res.status(400).json({ error: 'Check number required.' });
-  if (!voucherCount||voucherCount<1)            return res.status(400).json({ error: 'Valid voucher count required.' });
   if (amount==null||isNaN(amount)||amount<0)    return res.status(400).json({ error: 'Valid amount required.' });
   if (!manager)                                 return res.status(400).json({ error: 'Manager initials required.' });
   if (!department)                              return res.status(400).json({ error: 'Department required.' });
   if (!transactionDate)                         return res.status(400).json({ error: 'Transaction date required.' });
   try {
     const e = { id: uid(), serials: JSON.stringify(serials), check_number: checkNumber,
-      voucher_count: voucherCount, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), department, transaction_date: transactionDate, voided: 0, status: 'active', created_at: Date.now() };
+      voucher_count: serials.length, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), department, transaction_date: transactionDate, voided: 0, status: 'active', created_at: Date.now() };
     db.prepare('INSERT INTO entries (id,serials,check_number,voucher_count,amount,manager,department,transaction_date,voided,status,created_at) VALUES (@id,@serials,@check_number,@voucher_count,@amount,@manager,@department,@transaction_date,@voided,@status,@created_at)').run(e);
     const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
     log('info', 'entry.created', { user: username, manager, checkNumber, amount: parseFloat(amount), serials });
@@ -846,13 +845,13 @@ app.post('/api/entries', requireAuth, (req, res) => {
 });
 
 app.put('/api/entries/:id', requireAuth, (req, res) => {
-  const { serials, checkNumber, voucherCount, amount, manager, department, transactionDate } = req.body;
+  const { serials, checkNumber, amount, manager, department, transactionDate } = req.body;
   const { id } = req.params;
-  if (!Array.isArray(serials)||!serials.length||!checkNumber||!voucherCount||amount==null||!manager||!department||!transactionDate)
+  if (!Array.isArray(serials)||!serials.length||!checkNumber||amount==null||!manager||!department||!transactionDate)
     return res.status(400).json({ error: 'All fields required.' });
   try {
     const result = db.prepare('UPDATE entries SET serials=@serials,check_number=@check_number,voucher_count=@voucher_count,amount=@amount,manager=@manager,department=@department,transaction_date=@transaction_date WHERE id=@id')
-      .run({ id, serials: JSON.stringify(serials), check_number: checkNumber, voucher_count: voucherCount, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), department, transaction_date: transactionDate });
+      .run({ id, serials: JSON.stringify(serials), check_number: checkNumber, voucher_count: serials.length, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), department, transaction_date: transactionDate });
     if (!result.changes) return res.status(404).json({ error: 'Entry not found.' });
     const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
     log('info', 'entry.edited', { user: username, entryId: id, checkNumber, amount: parseFloat(amount) });
