@@ -149,9 +149,12 @@ function refresh() {
   const now = Date.now();
   const cutoff = days > 0 ? now - days * 86400000 : 0;
 
+  const cutoffDate = days > 0 ? new Date(now - days * 86400000).toISOString().slice(0,10) : '';
+
   const filtered = allEntries.filter(e => {
     if (e.status !== 'active') return false;
-    if (e.createdAt < cutoff) return false;
+    const td = e.transactionDate || new Date(e.createdAt).toISOString().slice(0,10);
+    if (cutoffDate && td < cutoffDate) return false;
     if (dept && e.department !== dept) return false;
     return true;
   });
@@ -183,14 +186,19 @@ function updateSummary(data) {
   document.getElementById('s-avg-sub').textContent = totalVouchers ? '$' + (totalAmt / totalVouchers).toFixed(2) + '/voucher' : '';
 }
 
+function txDateStr(e) {
+  return e.transactionDate || new Date(e.createdAt).toISOString().slice(0,10);
+}
+
 function bucketByDate(data, days) {
   const map = {};
   const fmt = days > 90 ? 'month' : 'day';
   data.forEach(e => {
-    const d = new Date(e.createdAt);
+    const iso = txDateStr(e);
+    const d = new Date(iso + 'T00:00:00');
     const key = fmt === 'month'
       ? d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
-      : d.toISOString().slice(0,10);
+      : iso;
     if (!map[key]) map[key] = { count: 0, amount: 0, vouchers: 0 };
     map[key].count++;
     map[key].amount += e.amount;
@@ -199,7 +207,7 @@ function bucketByDate(data, days) {
 
   const now = new Date();
   if (fmt === 'day') {
-    const start = days > 0 ? new Date(Date.now() - days * 86400000) : new Date(Math.min(...data.map(e => e.createdAt)));
+    const start = days > 0 ? new Date(Date.now() - days * 86400000) : new Date(Math.min(...data.map(e => new Date(txDateStr(e)).getTime())));
     for (let d = new Date(start); d <= now; d.setDate(d.getDate()+1)) {
       const key = d.toISOString().slice(0,10);
       if (!map[key]) map[key] = { count: 0, amount: 0, vouchers: 0 };
@@ -306,7 +314,7 @@ function renderWeekday(data) {
   const counts = [0,0,0,0,0,0,0];
   const amounts = [0,0,0,0,0,0,0];
   data.forEach(e => {
-    const day = new Date(e.createdAt).getDay();
+    const day = new Date(txDateStr(e) + 'T00:00:00').getDay();
     counts[day]++;
     amounts[day] += e.amount;
   });

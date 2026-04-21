@@ -501,6 +501,10 @@
         <div id="serial-dupe-warn" style="display:none;margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;padding:8px 12px;background:rgba(230,126,34,.1);border-left:3px solid #e67e22;color:#e89850;line-height:1.6"></div>
       </div>
       <div class="field-group">
+        <label for="f-date">Transaction Date</label>
+        <input id="f-date" type="date" autocomplete="off">
+      </div>
+      <div class="field-group">
         <label for="f-check">Check Number</label>
         <input id="f-check" type="text" placeholder="e.g. 10247" autocomplete="off">
       </div>
@@ -547,7 +551,7 @@
     <table>
       <thead>
         <tr>
-          <th>Date &amp; Time</th>
+          <th>Transaction Date</th>
           <th>Serial</th>
           <th>Check #</th>
           <th># Vouchers</th>
@@ -581,6 +585,10 @@
             onkeydown="handleSerialKey(event,'edit')" oninput="handleSerialInput(event,'edit')">
         </div>
         <div class="tag-hint">Press Enter, Tab, or Space after each serial number</div>
+      </div>
+      <div class="field-group">
+        <label for="e-date">Transaction Date</label>
+        <input id="e-date" type="date" autocomplete="off">
       </div>
       <div class="field-group">
         <label for="e-check">Check Number</label>
@@ -628,6 +636,7 @@
   async function init() {
     updateDateHeader();
     setInterval(updateDateHeader, 30000);
+    document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
     document.getElementById('edit-modal').addEventListener('click', function(e) {
       if (e.target === this) closeModal();
     });
@@ -846,9 +855,10 @@
 
     emptyState.style.display = 'none';
     tbody.innerHTML = filtered.map(e => {
-      const dt      = new Date(e.createdAt);
-      const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      const timeStr = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const txDate  = e.transactionDate ? new Date(e.transactionDate + 'T00:00:00') : new Date(e.createdAt);
+      const dateStr = txDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const loggedDt = new Date(e.createdAt);
+      const loggedStr = loggedDt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + loggedDt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       const serialsHtml = e.serials && e.serials.length
         ? `<div class="serial-pills">${e.serials.map(s => `<span class="serial-pill">${esc(s)}</span>`).join('')}</div>`
         : '<span style="color:var(--cream-dim)">—</span>';
@@ -857,7 +867,7 @@
       const isActive = e.status === 'active';
 
       return `<tr class="${rowClass}">
-        <td>${dateStr}<br><small style="color:var(--cream-dim)">${timeStr}</small></td>
+        <td>${dateStr}<br><small style="color:var(--cream-dim)">Logged ${loggedStr}</small></td>
         <td>${serialsHtml}</td>
         <td>${esc(e.checkNumber)}</td>
         <td>${e.voucherCount}</td>
@@ -879,14 +889,16 @@
     const serialInput = document.getElementById('f-serial-input');
     if (serialInput.value.trim()) commitTag('form', serialInput.value.trim(), serialInput);
 
-    const serials      = tagState['form'];
-    const checkNumber  = val('f-check');
-    const voucherCount = parseInt(val('f-count'));
-    const amount       = parseFloat(val('f-amount'));
-    const department   = document.getElementById('f-department').value;
-    const manager      = document.getElementById('f-manager').value;
+    const serials         = tagState['form'];
+    const transactionDate = val('f-date');
+    const checkNumber     = val('f-check');
+    const voucherCount    = parseInt(val('f-count'));
+    const amount          = parseFloat(val('f-amount'));
+    const department      = document.getElementById('f-department').value;
+    const manager         = document.getElementById('f-manager').value;
 
     if (!serials.length) return toast('At least one serial number is required.', true);
+    if (!transactionDate) return toast('Transaction date is required.', true);
     if (!checkNumber) return toast('Check number is required.', true);
     if (!voucherCount || voucherCount < 1) return toast('Enter a valid voucher count.', true);
     if (isNaN(amount) || amount < 0) return toast('Enter a valid amount.', true);
@@ -896,7 +908,7 @@
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
     try {
-      const entry = await api('POST', '/entries', { serials, checkNumber, voucherCount, amount, department, manager });
+      const entry = await api('POST', '/entries', { serials, transactionDate, checkNumber, voucherCount, amount, department, manager });
       entries.unshift(entry);
       clearForm();
       renderAll();
@@ -910,6 +922,7 @@
 
   function clearForm() {
     ['f-check','f-count','f-amount'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
     document.getElementById('f-department').value = '';
     document.getElementById('f-manager').value = myInitials;
     const warn = document.getElementById('serial-dupe-warn');
@@ -951,6 +964,7 @@
     editingId = id;
     tagState['edit'] = [...(e.serials || [])];
     renderTags('edit');
+    document.getElementById('e-date').value   = e.transactionDate || '';
     document.getElementById('e-check').value  = e.checkNumber;
     document.getElementById('e-count').value  = e.voucherCount;
     document.getElementById('e-amount').value = e.amount;
@@ -971,21 +985,22 @@
     const serialInput = document.getElementById('e-serial-input');
     if (serialInput.value.trim()) commitTag('edit', serialInput.value.trim(), serialInput);
 
-    const serials      = tagState['edit'];
-    const checkNumber  = document.getElementById('e-check').value.trim();
-    const voucherCount = parseInt(document.getElementById('e-count').value);
-    const amount       = parseFloat(document.getElementById('e-amount').value);
-    const department   = document.getElementById('e-department').value;
-    const manager      = document.getElementById('e-manager').value;
+    const serials         = tagState['edit'];
+    const transactionDate = document.getElementById('e-date').value;
+    const checkNumber     = document.getElementById('e-check').value.trim();
+    const voucherCount    = parseInt(document.getElementById('e-count').value);
+    const amount          = parseFloat(document.getElementById('e-amount').value);
+    const department      = document.getElementById('e-department').value;
+    const manager         = document.getElementById('e-manager').value;
 
     if (!serials.length) return toast('At least one serial number is required.', true);
-    if (!checkNumber || !voucherCount || isNaN(amount) || !department || !manager)
+    if (!transactionDate || !checkNumber || !voucherCount || isNaN(amount) || !department || !manager)
       return toast('All fields are required.', true);
 
     const btn = document.getElementById('save-btn');
     btn.disabled = true;
     try {
-      const updated = await api('PUT', `/entries/${editingId}`, { serials, checkNumber, voucherCount, amount, department, manager });
+      const updated = await api('PUT', `/entries/${editingId}`, { serials, transactionDate, checkNumber, voucherCount, amount, department, manager });
       const idx = entries.findIndex(e => e.id === editingId);
       if (idx !== -1) entries[idx] = updated;
       closeModal();
@@ -1004,12 +1019,14 @@
     const toExport = entries.filter(e => e.status !== 'archived');
 
     const rows = [
-      ['Date', 'Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Department', 'Initials'],
+      ['Transaction Date', 'Logged Date', 'Logged Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Department', 'Initials'],
       ...toExport.map(e => {
-        const dt = new Date(e.createdAt);
+        const txDate = e.transactionDate || '';
+        const logDt = new Date(e.createdAt);
         return [
-          dt.toLocaleDateString('en-US'),
-          dt.toLocaleTimeString('en-US'),
+          txDate,
+          logDt.toLocaleDateString('en-US'),
+          logDt.toLocaleTimeString('en-US'),
           (e.serials || []).join('; '),
           e.checkNumber,
           e.voucherCount,
