@@ -1014,18 +1014,14 @@
     const toExport = entries.filter(e => e.status !== 'archived');
 
     const rows = [
-      ['Transaction Date', 'Logged Date', 'Logged Time', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Department', 'Initials'],
+      ['Transaction Date', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Department', 'Initials'],
       ...toExport.map(e => {
-        const txDate = e.transactionDate || '';
-        const logDt = new Date(e.createdAt);
         return [
-          txDate,
-          logDt.toLocaleDateString('en-US'),
-          logDt.toLocaleTimeString('en-US'),
+          e.transactionDate || '',
           (e.serials || []).join('; '),
           e.checkNumber,
           e.voucherCount,
-          e.amount.toFixed(2),
+          '$' + e.amount.toFixed(2),
           e.department || '',
           e.manager
         ];
