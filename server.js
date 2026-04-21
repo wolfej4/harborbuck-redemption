@@ -805,6 +805,37 @@ app.get('/api/admin/logs', requireAdmin, (req, res) => {
   }
 });
 
+app.get('/api/admin/audit', requireAdmin, (req, res) => {
+  const limit  = Math.min(parseInt(req.query.limit)  || 500, 2000);
+  const action = req.query.action || '';
+  const search = req.query.search || '';
+
+  if (!fs.existsSync(LOG_PATH)) return res.json([]);
+  try {
+    const stat      = fs.statSync(LOG_PATH);
+    const chunkSize = Math.min(stat.size, 2 * 1024 * 1024); // read last 2 MB
+    const buf       = Buffer.alloc(chunkSize);
+    const fd        = fs.openSync(LOG_PATH, 'r');
+    fs.readSync(fd, buf, 0, chunkSize, stat.size - chunkSize);
+    fs.closeSync(fd);
+
+    const entries = buf.toString('utf8')
+      .split('\n')
+      .filter(l => l.trim())
+      .map(l => { try { return JSON.parse(l); } catch { return null; } })
+      .filter(Boolean)
+      .filter(e => e.event && e.event.startsWith('entry.'))
+      .reverse()
+      .filter(e => !action || e.event === `entry.${action}`)
+      .filter(e => !search || JSON.stringify(e).toLowerCase().includes(search.toLowerCase()))
+      .slice(0, limit);
+
+    res.json(entries);
+  } catch(e) {
+    res.status(500).json({ error: 'Failed to read audit trail.' });
+  }
+});
+
 app.get('/api/admin/logs/download', requireAdmin, (req, res) => {
   if (!fs.existsSync(LOG_PATH)) return res.status(404).send('No log file yet.');
   res.setHeader('Content-Type', 'text/plain');

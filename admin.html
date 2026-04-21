@@ -92,6 +92,19 @@ select option{background:var(--navy-mid)}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.error{border-left-color:var(--red)}
 .toast.success{border-left-color:#3da66e}
+/* content card wrapper for logs/audit */
+.content-card{background:var(--navy-mid);border:1px solid var(--rule);border-left:4px solid var(--brass);padding:20px 28px}
+.content-card .filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-bottom:16px;margin-bottom:16px;border-bottom:1px solid var(--rule)}
+.content-card .filter-bar input,.content-card .filter-bar select{background:var(--navy-light);border:1px solid var(--rule);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:6px 10px;outline:none;width:auto;border-bottom:2px solid var(--brass-dim)}
+.content-card .filter-bar .search{width:200px}
+.content-card .tbl-wrap{overflow-x:auto;margin:0 -28px -20px;padding:0 28px 20px}
+.content-card .tbl-wrap table{min-width:860px}
+.action-badge{display:inline-block;font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border:1px solid;white-space:nowrap}
+.action-badge.created{background:rgba(46,125,82,.15);color:#80d4aa;border-color:rgba(46,125,82,.35)}
+.action-badge.edited{background:rgba(196,154,60,.12);color:var(--brass-light);border-color:rgba(196,154,60,.3)}
+.action-badge.archived{background:rgba(230,126,34,.12);color:#e89850;border-color:rgba(230,126,34,.3)}
+.action-badge.restored{background:rgba(46,82,125,.15);color:#80b4e0;border-color:rgba(46,82,125,.3)}
+.action-badge.deleted{background:rgba(192,57,43,.12);color:#e08080;border-color:rgba(192,57,43,.3)}
 /* misc */
 .no-data{font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--cream-dim);padding:24px;text-align:center}
 .hint{font-size:.62rem;color:var(--cream-dim);margin-top:3px}
@@ -112,6 +125,7 @@ select option{background:var(--navy-mid)}
   <div class="tabs">
     <div class="tab active" onclick="switchTab('users')">Users</div>
     <div class="tab" onclick="switchTab('settings')">Settings</div>
+    <div class="tab" onclick="switchTab('audit')">Audit Trail</div>
     <div class="tab" onclick="switchTab('logs')">Logs</div>
   </div>
 
@@ -225,40 +239,74 @@ select option{background:var(--navy-mid)}
     </div>
   </div>
 
+  <!-- AUDIT TRAIL PANEL -->
+  <div class="panel" id="panel-audit">
+    <div class="section-title">Entry Audit Trail</div>
+    <div class="content-card">
+      <div class="filter-bar">
+        <select id="audit-action" onchange="loadAudit()">
+          <option value="">All actions</option>
+          <option value="created">Created</option>
+          <option value="edited">Edited</option>
+          <option value="archived">Archived</option>
+          <option value="restored">Restored</option>
+          <option value="deleted">Deleted</option>
+        </select>
+        <input id="audit-search" class="search" type="text" placeholder="Search user, check #, manager…" oninput="debouncedAuditSearch()">
+        <button class="btn btn-ghost" style="padding:6px 14px;font-size:.68rem" onclick="loadAudit()">↺ Refresh</button>
+        <div id="audit-count" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--cream-dim)"></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:145px">When</th>
+              <th style="width:110px">User</th>
+              <th style="width:100px">Action</th>
+              <th style="width:120px">Check #</th>
+              <th style="width:100px">Amount</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody"><tr><td colspan="6" class="no-data">Switch to this tab to load the audit trail.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- LOGS PANEL -->
   <div class="panel" id="panel-logs">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-      <div class="section-title" style="margin:0;border:0;padding:0">Application Logs</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="log-level" onchange="loadLogs()" style="background:var(--navy-mid);border:1px solid var(--rule);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:6px 10px;outline:none;width:auto">
+    <div class="section-title">Application Logs</div>
+    <div class="content-card">
+      <div class="filter-bar">
+        <select id="log-level" onchange="loadLogs()">
           <option value="">All levels</option>
           <option value="info">Info</option>
           <option value="warn">Warn</option>
           <option value="error">Error</option>
         </select>
-        <input id="log-search" type="text" placeholder="Search…" oninput="debouncedSearch()"
-          style="background:var(--navy-mid);border:1px solid var(--rule);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.72rem;padding:6px 10px;outline:none;width:180px">
+        <input id="log-search" class="search" type="text" placeholder="Search…" oninput="debouncedSearch()">
         <label style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--cream-dim);cursor:pointer;user-select:none">
           <input type="checkbox" id="log-autorefresh" onchange="toggleAutoRefresh()" style="accent-color:var(--brass)"> Auto-refresh
         </label>
         <button class="btn btn-ghost" style="padding:6px 14px;font-size:.68rem" onclick="loadLogs()">↺ Refresh</button>
         <a href="/api/admin/logs/download" style="font-family:'IBM Plex Mono',monospace;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;padding:6px 14px;color:var(--brass);border:1px solid var(--brass-dim);text-decoration:none" onmouseover="this.style.background='rgba(196,154,60,.1)'" onmouseout="this.style.background='transparent'">↓ Download</a>
+        <div id="log-count" style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--cream-dim)"></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:145px">Timestamp</th>
+              <th style="width:60px">Level</th>
+              <th style="width:210px">Event</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="log-tbody"><tr><td colspan="4" class="no-data">Switch to this tab to load logs.</td></tr></tbody>
+        </table>
       </div>
     </div>
-    <div style="overflow-x:auto">
-      <table style="min-width:860px">
-        <thead>
-          <tr>
-            <th style="width:155px">Timestamp</th>
-            <th style="width:60px">Level</th>
-            <th style="width:210px">Event</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody id="log-tbody"><tr><td colspan="4" class="no-data">Switch to this tab to load logs.</td></tr></tbody>
-      </table>
-    </div>
-    <div id="log-count" style="font-family:'IBM Plex Mono',monospace;font-size:.68rem;color:var(--cream-dim);margin-top:10px;text-align:right"></div>
   </div>
 
 </div>
@@ -299,10 +347,11 @@ async function init(){
 
 // ── TABS ──────────────────────────────────────
 function switchTab(t){
-  document.querySelectorAll('.tab').forEach((el,i)=>{ el.classList.toggle('active',['users','settings','logs'][i]===t); });
+  document.querySelectorAll('.tab').forEach((el,i)=>{ el.classList.toggle('active',['users','settings','audit','logs'][i]===t); });
   document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
   document.getElementById(`panel-${t}`).classList.add('active');
-  if(t==='logs') loadLogs();
+  if(t==='logs')  loadLogs();
+  if(t==='audit') loadAudit();
 }
 
 // ── LOGS ──────────────────────────────────────
@@ -371,6 +420,57 @@ function renderLogs(logs){
       <td>${badge}</td>
       <td style="font-size:.78rem;color:var(--brass-light);font-family:'IBM Plex Mono',monospace">${esc(e.event)}</td>
       <td style="font-size:.74rem;font-family:'IBM Plex Mono',monospace;line-height:1.6">${details||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── AUDIT TRAIL ───────────────────────────────
+let auditSearchTimer=null;
+function debouncedAuditSearch(){ clearTimeout(auditSearchTimer); auditSearchTimer=setTimeout(loadAudit,350); }
+
+async function loadAudit(){
+  const action=document.getElementById('audit-action').value;
+  const search=document.getElementById('audit-search').value.trim();
+  const params=new URLSearchParams({ limit:500 });
+  if(action) params.set('action',action);
+  if(search) params.set('search',search);
+  try{
+    const res=await fetch('/api/admin/audit?'+params);
+    const data=await res.json();
+    if(!res.ok){ document.getElementById('audit-tbody').innerHTML=`<tr><td colspan="6" class="no-data" style="color:#e08080">${data.error||'Failed to load.'}</td></tr>`; return; }
+    renderAudit(data);
+  }catch(e){
+    document.getElementById('audit-tbody').innerHTML='<tr><td colspan="6" class="no-data" style="color:#e08080">Network error.</td></tr>';
+  }
+}
+
+function renderAudit(data){
+  const tbody=document.getElementById('audit-tbody');
+  document.getElementById('audit-count').textContent=data.length?`${data.length} event${data.length===1?'':'s'} (newest first)`:'';
+
+  if(!data.length){
+    tbody.innerHTML='<tr><td colspan="6" class="no-data">No audit events found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML=data.map(e=>{
+    const dt=new Date(e.ts);
+    const dateStr=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const timeStr=dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const action=(e.event||'').replace(/^entry\./,'');
+    const amount=(typeof e.amount==='number')?`$${e.amount.toFixed(2)}`:'—';
+    const details=[];
+    if(e.manager)                   details.push(`<span style="color:var(--cream-dim)">manager=</span>${esc(e.manager)}`);
+    if(Array.isArray(e.serials))    details.push(`<span style="color:var(--cream-dim)">serials=</span>${esc(e.serials.join(', '))}`);
+    if(e.entryId)                   details.push(`<span style="color:var(--cream-dim)">id=</span>${esc(e.entryId)}`);
+
+    return `<tr>
+      <td style="font-size:.72rem;color:var(--cream-dim);white-space:nowrap">${dateStr}<br>${timeStr}</td>
+      <td><span class="initials-badge">${esc(e.user||'—')}</span></td>
+      <td><span class="action-badge ${action}">${action}</span></td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:.78rem">${esc(e.checkNumber||'—')}</td>
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--brass-light)">${amount}</td>
+      <td style="font-size:.72rem;font-family:'IBM Plex Mono',monospace;line-height:1.6">${details.join('  ')||'—'}</td>
     </tr>`;
   }).join('');
 }
