@@ -333,6 +333,21 @@
 
   .void-toggle input[type="checkbox"] { accent-color: var(--brass); width: 14px; height: 14px; }
 
+  .bulk-bar {
+    display: none; align-items: center; gap: 10px;
+    background: rgba(196,154,60,0.08); border: 1px solid rgba(196,154,60,0.25);
+    border-left: 4px solid var(--brass);
+    padding: 10px 14px; margin-bottom: 12px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem;
+  }
+  .bulk-bar.visible { display: flex; }
+  .bulk-bar .count { color: var(--brass-light); font-weight: 600; letter-spacing: 0.05em; }
+  .bulk-bar .spacer { flex: 1; }
+
+  .row-check, .head-check { accent-color: var(--brass); width: 15px; height: 15px; cursor: pointer; vertical-align: middle; }
+  th.check-col, td.check-col { width: 36px; padding-left: 12px; padding-right: 4px; text-align: center; }
+  tr.row-selected { background: rgba(196,154,60,0.08); }
+
   table { width: 100%; border-collapse: collapse; min-width: 700px; }
   thead tr { border-bottom: 2px solid var(--brass); }
 
@@ -548,9 +563,18 @@
         <button class="btn btn-sm btn-export" onclick="exportCSV()">↓ Export CSV</button>
       </div>
     </div>
+    <div class="bulk-bar" id="bulk-bar">
+      <span class="count" id="bulk-count">0 selected</span>
+      <button class="btn btn-sm btn-archive" id="bulk-archive-btn" onclick="bulkAction('archive')">Archive</button>
+      <button class="btn btn-sm btn-restore" id="bulk-restore-btn" onclick="bulkAction('restore')">Restore</button>
+      <button class="btn btn-sm btn-delete" onclick="bulkAction('delete')">Delete</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm btn-ghost" onclick="clearSelection()">Clear</button>
+    </div>
     <table>
       <thead>
         <tr>
+          <th class="check-col"><input type="checkbox" class="head-check" id="select-all" onchange="toggleSelectAll(this.checked)" title="Select all visible"></th>
           <th>Transaction Date</th>
           <th>Serial</th>
           <th>Check #</th>
@@ -830,6 +854,9 @@
     }).join('');
   }
 
+  let selectedIds = new Set();
+  let visibleIds  = [];
+
   function renderTable() {
     const showArchived = document.getElementById('show-archived').checked;
     const dateFrom     = document.getElementById('filter-date-from').value;
@@ -843,12 +870,19 @@
       return true;
     });
 
+    visibleIds = filtered.map(e => e.id);
+    // Drop any selections that are no longer visible
+    for (const id of Array.from(selectedIds)) {
+      if (!visibleIds.includes(id)) selectedIds.delete(id);
+    }
+
     const tbody     = document.getElementById('ledger-body');
     const emptyState = document.getElementById('empty-state');
 
     if (!filtered.length) {
       tbody.innerHTML = '';
       emptyState.style.display = 'block';
+      updateBulkBar();
       return;
     }
 
@@ -862,10 +896,12 @@
         ? `<div class="serial-pills">${e.serials.map(s => `<span class="serial-pill">${esc(s)}</span>`).join('')}</div>`
         : '<span style="color:var(--cream-dim)">—</span>';
 
-      const rowClass = e.status !== 'active' ? e.status : '';
+      const rowClass = [e.status !== 'active' ? e.status : '', selectedIds.has(e.id) ? 'row-selected' : ''].filter(Boolean).join(' ');
       const isActive = e.status === 'active';
+      const checked  = selectedIds.has(e.id) ? 'checked' : '';
 
       return `<tr class="${rowClass}">
+        <td class="check-col"><input type="checkbox" class="row-check" ${checked} onchange="toggleSelect('${e.id}', this.checked)"></td>
         <td>${dateStr}<br><small style="color:var(--cream-dim)">Logged ${loggedStr}</small></td>
         <td>${serialsHtml}</td>
         <td>${esc(e.checkNumber)}</td>
@@ -881,6 +917,80 @@
         </div></td>
       </tr>`;
     }).join('');
+
+    updateBulkBar();
+  }
+
+  function toggleSelect(id, checked) {
+    if (checked) selectedIds.add(id); else selectedIds.delete(id);
+    const row = document.querySelector(`input.row-check[onchange*="${id}"]`)?.closest('tr');
+    if (row) row.classList.toggle('row-selected', checked);
+    updateBulkBar();
+  }
+
+  function toggleSelectAll(checked) {
+    if (checked) visibleIds.forEach(id => selectedIds.add(id));
+    else selectedIds.clear();
+    renderTable();
+  }
+
+  function clearSelection() {
+    selectedIds.clear();
+    renderTable();
+  }
+
+  function updateBulkBar() {
+    const bar   = document.getElementById('bulk-bar');
+    const count = selectedIds.size;
+    document.getElementById('bulk-count').textContent = count + ' selected';
+    bar.classList.toggle('visible', count > 0);
+
+    const selected = entries.filter(e => selectedIds.has(e.id));
+    const anyActive   = selected.some(e => e.status === 'active');
+    const anyArchived = selected.some(e => e.status === 'archived');
+    document.getElementById('bulk-archive-btn').style.display = anyActive   ? '' : 'none';
+    document.getElementById('bulk-restore-btn').style.display = anyArchived ? '' : 'none';
+
+    const selectAll = document.getElementById('select-all');
+    if (selectAll) {
+      const allChecked = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+      selectAll.checked = allChecked;
+      selectAll.indeterminate = !allChecked && count > 0;
+    }
+  }
+
+  async function bulkAction(action) {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+
+    if (action === 'delete' && !confirm(`Permanently delete ${ids.length} entr${ids.length === 1 ? 'y' : 'ies'}? This cannot be undone.`)) return;
+
+    const targets = entries.filter(e => selectedIds.has(e.id));
+    const toProcess = action === 'archive' ? targets.filter(e => e.status === 'active')
+                    : action === 'restore' ? targets.filter(e => e.status === 'archived')
+                    : targets;
+
+    let ok = 0, fail = 0;
+    for (const e of toProcess) {
+      try {
+        if (action === 'delete') {
+          await api('DELETE', `/entries/${e.id}`);
+          entries = entries.filter(x => x.id !== e.id);
+        } else {
+          const updated = await api('PATCH', `/entries/${e.id}/archive`);
+          const idx = entries.findIndex(x => x.id === e.id);
+          if (idx !== -1) entries[idx] = updated;
+        }
+        ok++;
+      } catch (err) {
+        fail++;
+      }
+    }
+
+    selectedIds.clear();
+    renderAll();
+    const verb = action === 'delete' ? 'deleted' : action === 'archive' ? 'archived' : 'restored';
+    toast(`${ok} entr${ok === 1 ? 'y' : 'ies'} ${verb}${fail ? ` (${fail} failed)` : ''}.`, fail > 0);
   }
 
   // ── ENTRY CRUD ────────────────────────────────
