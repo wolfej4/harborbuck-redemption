@@ -31,6 +31,12 @@ input:focus{border-bottom-color:var(--brass-light);background:rgba(26,48,80,.8)}
 .links{display:flex;justify-content:space-between;margin-top:18px;flex-wrap:wrap;gap:8px}
 .links a{font-size:.68rem;color:var(--brass-dim);text-decoration:none;letter-spacing:.06em}
 .links a:hover{color:var(--brass)}
+.divider{display:none;align-items:center;gap:10px;margin:20px 0 14px;color:var(--brass-dim);font-size:.6rem;letter-spacing:.18em;text-transform:uppercase}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--rule)}
+.divider.show{display:flex}
+.btn-sso{display:none;width:100%;background:transparent;color:var(--brass-light);border:1px solid var(--brass-dim);font-family:'IBM Plex Mono',monospace;font-size:.78rem;font-weight:500;letter-spacing:.12em;text-transform:uppercase;padding:12px;cursor:pointer;text-align:center;text-decoration:none;transition:all .15s}
+.btn-sso.show{display:block}
+.btn-sso:hover{border-color:var(--brass-light);background:rgba(196,154,60,.08)}
 </style></head><body>
 <div class="brand"><h1>⚓ Harborbucks</h1><p>Voucher Ledger — Internal Use Only</p></div>
 <div class="card">
@@ -39,6 +45,8 @@ input:focus{border-bottom-color:var(--brass-light);background:rgba(26,48,80,.8)}
   <div class="field"><label>Username</label><input id="username" type="text" placeholder="username" autocomplete="username" autofocus></div>
   <div class="field"><label>Password</label><input id="password" type="password" placeholder="••••••••" autocomplete="current-password"></div>
   <button class="btn" id="btn" onclick="login()">Sign In</button>
+  <div class="divider" id="sso-divider">or</div>
+  <a class="btn-sso" id="sso-btn" href="/auth/oidc/login">Sign in with SSO</a>
   <div class="links">
     <a href="/reset-request" id="reset-link" style="display:none">Forgot password?</a>
     <a href="/register" id="reg-link" style="display:none">Create account →</a>
@@ -46,9 +54,17 @@ input:focus{border-bottom-color:var(--brass-light);background:rgba(26,48,80,.8)}
 </div>
 <script>
 document.getElementById('password').addEventListener('keydown',e=>{ if(e.key==='Enter') login(); });
+const ssoErr=new URLSearchParams(location.search).get('sso_error');
+if(ssoErr) showErr('SSO: '+ssoErr);
 fetch('/api/public-config').then(r=>r.json()).then(cfg=>{
   if(cfg.allowRegistration) document.getElementById('reg-link').style.display='';
   if(cfg.smtpConfigured)    document.getElementById('reset-link').style.display='';
+  if(cfg.oidc?.enabled){
+    const btn=document.getElementById('sso-btn');
+    btn.textContent=cfg.oidc.label||'Sign in with SSO';
+    btn.classList.add('show');
+    document.getElementById('sso-divider').classList.add('show');
+  }
 });
 async function login(){
   const username=document.getElementById('username').value.trim();

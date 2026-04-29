@@ -99,6 +99,8 @@ db.exec(`
     { col: 'mfa_type',    sql: "ALTER TABLE users ADD COLUMN mfa_type TEXT NOT NULL DEFAULT 'none'" },
     { col: 'totp_secret', sql: 'ALTER TABLE users ADD COLUMN totp_secret TEXT' },
     { col: 'avatar_data', sql: 'ALTER TABLE users ADD COLUMN avatar_data TEXT' },
+    { col: 'oidc_sub',      sql: 'ALTER TABLE users ADD COLUMN oidc_sub TEXT' },
+    { col: 'oidc_provider', sql: 'ALTER TABLE users ADD COLUMN oidc_provider TEXT' },
   ];
   for (const m of migrations) {
     if (!existingCols.includes(m.col)) {
@@ -201,6 +203,48 @@ function emailTemplate(heading, bodyHtml, footerText) {
 </body></html>`;
 }
 
+// ── OIDC ───────────────────────────────────────
+function getOidcConfig() {
+  const raw = getConfig('oidc_config');
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+function isOidcReady(cfg = getOidcConfig()) {
+  return !!(cfg?.enabled && cfg.issuer && cfg.clientId);
+}
+
+// In-memory cache of discovery docs, keyed by issuer URL.
+const oidcDiscoveryCache = new Map();
+async function discoverOidc(issuer) {
+  if (!issuer) throw new Error('OIDC issuer not configured.');
+  const key = issuer.replace(/\/$/, '');
+  if (oidcDiscoveryCache.has(key)) return oidcDiscoveryCache.get(key);
+  const url = key + '/.well-known/openid-configuration';
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`OIDC discovery failed: HTTP ${res.status}`);
+  const doc = await res.json();
+  if (!doc.authorization_endpoint || !doc.token_endpoint) {
+    throw new Error('OIDC discovery missing authorization_endpoint/token_endpoint.');
+  }
+  oidcDiscoveryCache.set(key, doc);
+  return doc;
+}
+
+function oidcRedirectUri(req, cfg) {
+  if (cfg.redirectUri) return cfg.redirectUri;
+  return `${req.protocol}://${req.get('host')}/auth/oidc/callback`;
+}
+
+// Decode the JWT payload without signature verification.
+// Safe here because the id_token is fetched directly from the token_endpoint
+// over TLS (server-to-server), and we additionally validate iss/aud/nonce/exp.
+function decodeJwtPayload(token) {
+  const parts = String(token).split('.');
+  if (parts.length !== 3) throw new Error('Malformed id_token.');
+  const json = Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+  return JSON.parse(json);
+}
+
 // ── MIDDLEWARE ─────────────────────────────────
 app.set('trust proxy', 1);
 app.use(express.json());
@@ -285,10 +329,162 @@ app.get('/auth/logout', (req, res) => {
 
 // ── PUBLIC CONFIG ──────────────────────────────
 app.get('/api/public-config', (_req, res) => {
+  const oidc = getOidcConfig();
   res.json({
     allowRegistration: getConfig('allow_registration','1') === '1',
     smtpConfigured:    !!getSmtpConfig()?.host,
+    oidc: isOidcReady(oidc)
+      ? { enabled: true, label: oidc.buttonLabel?.trim() || 'Sign in with SSO' }
+      : { enabled: false },
   });
+});
+
+// ── OIDC: LOGIN ────────────────────────────────
+app.get('/auth/oidc/login', async (req, res) => {
+  const cfg = getOidcConfig();
+  if (!isOidcReady(cfg)) return res.redirect('/login?sso_error=' + encodeURIComponent('SSO is not configured.'));
+  try {
+    const doc      = await discoverOidc(cfg.issuer);
+    const state    = crypto.randomBytes(16).toString('hex');
+    const nonce    = crypto.randomBytes(16).toString('hex');
+    const redirect = oidcRedirectUri(req, cfg);
+    req.session.oidc = { state, nonce, redirectUri: redirect };
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id:     cfg.clientId,
+      redirect_uri:  redirect,
+      scope:         cfg.scopes?.trim() || 'openid profile email',
+      state, nonce,
+    });
+    log('info', 'auth.oidc.start', { ip: ip(req) });
+    res.redirect(`${doc.authorization_endpoint}?${params.toString()}`);
+  } catch (e) {
+    log('error', 'auth.oidc.login_fail', { msg: e.message, ip: ip(req) });
+    res.redirect('/login?sso_error=' + encodeURIComponent(e.message));
+  }
+});
+
+// ── OIDC: CALLBACK ─────────────────────────────
+app.get('/auth/oidc/callback', async (req, res) => {
+  const cfg     = getOidcConfig();
+  const sessOidc = req.session.oidc;
+  if (!isOidcReady(cfg) || !sessOidc) {
+    return res.redirect('/login?sso_error=' + encodeURIComponent('SSO session expired. Please try again.'));
+  }
+  const { code, state, error, error_description } = req.query;
+  if (error) {
+    log('warn', 'auth.oidc.idp_error', { error, error_description, ip: ip(req) });
+    delete req.session.oidc;
+    return res.redirect('/login?sso_error=' + encodeURIComponent(String(error_description || error)));
+  }
+  if (!code || state !== sessOidc.state) {
+    log('warn', 'auth.oidc.state_mismatch', { ip: ip(req) });
+    delete req.session.oidc;
+    return res.redirect('/login?sso_error=' + encodeURIComponent('Invalid SSO state. Please try again.'));
+  }
+
+  try {
+    const doc = await discoverOidc(cfg.issuer);
+    const body = new URLSearchParams({
+      grant_type:    'authorization_code',
+      code:          String(code),
+      redirect_uri:  sessOidc.redirectUri,
+      client_id:     cfg.clientId,
+      client_secret: cfg.clientSecret || '',
+    });
+    const tokenRes = await fetch(doc.token_endpoint, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+      body,
+    });
+    if (!tokenRes.ok) {
+      const t = await tokenRes.text();
+      throw new Error(`Token exchange failed (HTTP ${tokenRes.status}): ${t.slice(0, 200)}`);
+    }
+    const tok = await tokenRes.json();
+    if (!tok.id_token) throw new Error('Token response missing id_token.');
+
+    const claims = decodeJwtPayload(tok.id_token);
+
+    // Validate standard claims.
+    const expectedIss = cfg.issuer.replace(/\/$/, '');
+    const claimIss    = String(claims.iss || '').replace(/\/$/, '');
+    if (claimIss !== expectedIss) throw new Error(`Issuer mismatch (got "${claims.iss}").`);
+    const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+    if (!aud.includes(cfg.clientId)) throw new Error('Audience mismatch.');
+    if (claims.nonce !== sessOidc.nonce) throw new Error('Nonce mismatch.');
+    if (claims.exp && Date.now() / 1000 > Number(claims.exp) + 60) throw new Error('id_token expired.');
+
+    // Try to enrich from userinfo.
+    let profile = { ...claims };
+    if (doc.userinfo_endpoint && tok.access_token) {
+      try {
+        const uiRes = await fetch(doc.userinfo_endpoint, { headers: { Authorization: `Bearer ${tok.access_token}` } });
+        if (uiRes.ok) profile = { ...profile, ...(await uiRes.json()) };
+      } catch (e) {
+        log('warn', 'auth.oidc.userinfo_fail', { msg: e.message });
+      }
+    }
+
+    const sub   = String(claims.sub || profile.sub || '');
+    if (!sub)   throw new Error('Token had no subject.');
+    const email = String(profile.email || claims.email || '').trim().toLowerCase() || null;
+
+    // Look up by oidc_sub, then by email (and link).
+    let user = db.prepare('SELECT * FROM users WHERE oidc_sub = ?').get(sub);
+    if (!user && email) {
+      user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+      if (user) {
+        db.prepare('UPDATE users SET oidc_sub = ?, oidc_provider = ? WHERE id = ?').run(sub, expectedIss, user.id);
+        log('info', 'auth.oidc.linked', { user: user.username, sub });
+      }
+    }
+
+    // Auto-provision new user if enabled.
+    if (!user) {
+      if (!cfg.autoProvision) {
+        log('warn', 'auth.oidc.unknown_user', { sub, email, ip: ip(req) });
+        delete req.session.oidc;
+        return res.redirect('/login?sso_error=' + encodeURIComponent('No matching account. Ask your administrator to create one.'));
+      }
+      const baseName = (profile.preferred_username || profile.email || `oidc_${sub}`)
+        .toString().toLowerCase().replace(/[^a-z0-9._-]+/g, '_').slice(0, 48) || `oidc_${sub.slice(0, 8)}`;
+      let username = baseName, n = 1;
+      while (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) username = `${baseName}_${n++}`;
+
+      const initBase = ((profile.given_name?.[0] || '') + (profile.family_name?.[0] || ''))
+        .toUpperCase().replace(/[^A-Z0-9]/g, '') || baseName.slice(0, 2).toUpperCase();
+      let initials = initBase.slice(0, 4) || 'NEW', s = 1;
+      while (db.prepare('SELECT id FROM users WHERE initials = ?').get(initials)) {
+        initials = (initBase.slice(0, 3) || 'N') + (s++);
+      }
+
+      const role = ['admin', 'user'].includes(cfg.defaultRole) ? cfg.defaultRole : 'user';
+      const placeholderHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+      db.prepare(`INSERT INTO users (username,email,password_hash,initials,role,mfa_type,oidc_sub,oidc_provider,created_at)
+                  VALUES (?,?,?,?,?,?,?,?,?)`)
+        .run(username, email, placeholderHash, initials, role, 'none', sub, expectedIss, Date.now());
+      user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+      log('info', 'auth.oidc.user_provisioned', { user: user.username, sub, role, ip: ip(req) });
+    }
+
+    delete req.session.oidc;
+    req.session.regenerate(err => {
+      if (err) {
+        log('error', 'auth.oidc.session_err', { msg: err.message });
+        return res.redirect('/login?sso_error=' + encodeURIComponent('Session error.'));
+      }
+      req.session.userId        = user.id;
+      req.session.userRole      = user.role;
+      req.session.authenticated = true;
+      log('info', 'auth.login.success', { user: user.username, mfa: 'oidc', ip: ip(req) });
+      res.redirect('/');
+    });
+  } catch (e) {
+    delete req.session.oidc;
+    log('error', 'auth.oidc.callback_fail', { msg: e.message, ip: ip(req) });
+    res.redirect('/login?sso_error=' + encodeURIComponent(e.message.slice(0, 160)));
+  }
 });
 
 // ── AUTH: SETUP (first run) ────────────────────
@@ -726,16 +922,29 @@ app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
 });
 
 // ── ADMIN: SETTINGS ────────────────────────────
-app.get('/api/admin/settings', requireAdmin, (_req, res) => {
+app.get('/api/admin/settings', requireAdmin, (req, res) => {
   const smtp = getSmtpConfig() || {};
+  const oidc = getOidcConfig() || {};
   res.json({
     allowRegistration: getConfig('allow_registration','1') === '1',
     smtp: { host: smtp.host||'', port: smtp.port||587, user: smtp.user||'', from: smtp.from||'', secure: smtp.secure||false, hasPassword: !!smtp.pass },
+    oidc: {
+      enabled:         !!oidc.enabled,
+      issuer:          oidc.issuer || '',
+      clientId:        oidc.clientId || '',
+      redirectUri:     oidc.redirectUri || '',
+      scopes:          oidc.scopes || 'openid profile email',
+      buttonLabel:     oidc.buttonLabel || '',
+      autoProvision:   !!oidc.autoProvision,
+      defaultRole:     oidc.defaultRole || 'user',
+      hasClientSecret: !!oidc.clientSecret,
+      defaultRedirect: `${req.protocol}://${req.get('host')}/auth/oidc/callback`,
+    },
   });
 });
 
 app.post('/api/admin/settings', requireAdmin, (req, res) => {
-  const { allowRegistration, smtp } = req.body;
+  const { allowRegistration, smtp, oidc } = req.body;
   const adminUser = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
   if (allowRegistration !== undefined) {
     setConfig('allow_registration', allowRegistration ? '1' : '0');
@@ -752,6 +961,28 @@ app.post('/api/admin/settings', requireAdmin, (req, res) => {
       secure: smtp.secure || false,
     }));
     log('info', 'admin.settings.smtp_updated', { admin: adminUser, host: smtp.host });
+  }
+  if (oidc) {
+    const existing = getOidcConfig() || {};
+    const next = {
+      enabled:       !!oidc.enabled,
+      issuer:        (oidc.issuer || '').trim().replace(/\/$/, ''),
+      clientId:      (oidc.clientId || '').trim(),
+      clientSecret:  (typeof oidc.clientSecret === 'string' && oidc.clientSecret.length)
+                       ? oidc.clientSecret
+                       : (existing.clientSecret || ''),
+      redirectUri:   (oidc.redirectUri || '').trim(),
+      scopes:        (oidc.scopes || 'openid profile email').trim(),
+      buttonLabel:   (oidc.buttonLabel || '').trim(),
+      autoProvision: !!oidc.autoProvision,
+      defaultRole:   ['admin', 'user'].includes(oidc.defaultRole) ? oidc.defaultRole : 'user',
+    };
+    if (next.enabled && (!next.issuer || !next.clientId)) {
+      return res.status(400).json({ error: 'Issuer URL and Client ID are required to enable SSO.' });
+    }
+    setConfig('oidc_config', JSON.stringify(next));
+    oidcDiscoveryCache.clear();
+    log('info', 'admin.settings.oidc_updated', { admin: adminUser, enabled: next.enabled, issuer: next.issuer });
   }
   res.json({ ok: true });
 });
@@ -770,6 +1001,25 @@ app.post('/api/admin/settings/test-smtp', requireAdmin, async (req, res) => {
     res.json({ ok: true });
   } catch(e) {
     log('error', 'admin.smtp.test_fail', { admin: u?.username, msg: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/settings/test-oidc', requireAdmin, async (req, res) => {
+  const issuer = (req.body?.issuer || getOidcConfig()?.issuer || '').trim();
+  if (!issuer) return res.status(400).json({ error: 'Issuer URL is required.' });
+  oidcDiscoveryCache.delete(issuer.replace(/\/$/, ''));
+  try {
+    const doc = await discoverOidc(issuer);
+    res.json({
+      ok: true,
+      issuer:                doc.issuer,
+      authorization_endpoint: doc.authorization_endpoint,
+      token_endpoint:         doc.token_endpoint,
+      userinfo_endpoint:      doc.userinfo_endpoint || null,
+      jwks_uri:               doc.jwks_uri || null,
+    });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
