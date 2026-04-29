@@ -236,6 +236,81 @@ select option{background:var(--navy-mid)}
         <div id="smtp-test-result" style="display:none;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid"></div>
       </div>
       </div>
+
+    <div class="section-title" style="margin-top:28px">Single Sign-On (OIDC)</div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Enable SSO Sign-In</div>
+        <div class="setting-sub">When enabled, the login page shows an SSO button using the settings below.</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="oidc-enabled">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+
+    <div class="form-card">
+      <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px">
+        <div class="field">
+          <label>Issuer URL</label>
+          <input id="oidc-issuer" type="text" placeholder="https://accounts.example.com" autocomplete="off">
+          <div class="hint">The base URL of your IdP. We fetch <code>&lt;issuer&gt;/.well-known/openid-configuration</code>.</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="field">
+          <label>Client ID</label>
+          <input id="oidc-client-id" type="text" placeholder="client-id" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Client Secret</label>
+          <input id="oidc-client-secret" type="password" placeholder="••••••••" autocomplete="off">
+          <div class="hint">Leave blank to keep the existing secret.</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="field">
+          <label>Redirect URI</label>
+          <input id="oidc-redirect-uri" type="text" placeholder="auto-detected" autocomplete="off">
+          <div class="hint" id="oidc-default-redirect">Default: <code>/auth/oidc/callback</code></div>
+        </div>
+        <div class="field">
+          <label>Scopes</label>
+          <input id="oidc-scopes" type="text" placeholder="openid profile email" autocomplete="off">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="field">
+          <label>Sign-In Button Label</label>
+          <input id="oidc-button-label" type="text" placeholder="Sign in with SSO" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Default Role for New Users</label>
+          <select id="oidc-default-role">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--cream-dim);text-transform:none;letter-spacing:0;background:var(--navy-light);border:1px solid var(--rule);padding:10px 14px;user-select:none">
+          <input type="checkbox" id="oidc-auto-provision" style="width:15px;height:15px;flex-shrink:0;accent-color:var(--brass)">
+          Auto-create accounts for new SSO users
+        </label>
+        <div class="hint" style="margin-top:6px">If unchecked, only users that already exist (matched by email) can sign in via SSO.</div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveOIDC()">Save SSO</button>
+        <button class="btn btn-ghost" onclick="testOIDC()">Test Discovery</button>
+      </div>
+
+      <div id="oidc-test-result" style="display:none;margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid"></div>
     </div>
   </div>
 
@@ -574,6 +649,19 @@ function loadSettings(s){
   document.getElementById('smtp-from').value=s.smtp.from||'';
   document.getElementById('smtp-secure').checked=s.smtp.secure||false;
   if(s.smtp.hasPassword) document.getElementById('smtp-pass').placeholder='••••••••  (saved)';
+
+  // OIDC
+  const o=s.oidc||{};
+  document.getElementById('oidc-enabled').checked=!!o.enabled;
+  document.getElementById('oidc-issuer').value=o.issuer||'';
+  document.getElementById('oidc-client-id').value=o.clientId||'';
+  document.getElementById('oidc-redirect-uri').value=o.redirectUri||'';
+  document.getElementById('oidc-scopes').value=o.scopes||'openid profile email';
+  document.getElementById('oidc-button-label').value=o.buttonLabel||'';
+  document.getElementById('oidc-auto-provision').checked=!!o.autoProvision;
+  document.getElementById('oidc-default-role').value=o.defaultRole||'user';
+  if(o.hasClientSecret) document.getElementById('oidc-client-secret').placeholder='••••••••  (saved)';
+  if(o.defaultRedirect) document.getElementById('oidc-default-redirect').innerHTML=`Default: <code>${esc(o.defaultRedirect)}</code>`;
 }
 
 async function saveRegistration(){
@@ -628,6 +716,58 @@ async function testSMTP(){
   }catch(e){
     result.textContent = '✗ Network error.';
     result.style.cssText = 'display:block;margin-top:10px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid var(--red);color:#e08080;background:rgba(192,57,43,.1)';
+  }
+}
+
+async function saveOIDC(){
+  const oidc={
+    enabled:       document.getElementById('oidc-enabled').checked,
+    issuer:        document.getElementById('oidc-issuer').value.trim(),
+    clientId:      document.getElementById('oidc-client-id').value.trim(),
+    clientSecret:  document.getElementById('oidc-client-secret').value || undefined,
+    redirectUri:   document.getElementById('oidc-redirect-uri').value.trim(),
+    scopes:        document.getElementById('oidc-scopes').value.trim(),
+    buttonLabel:   document.getElementById('oidc-button-label').value.trim(),
+    autoProvision: document.getElementById('oidc-auto-provision').checked,
+    defaultRole:   document.getElementById('oidc-default-role').value,
+  };
+  try{
+    const res=await fetch('/api/admin/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({oidc})});
+    const d=await res.json();
+    if(!res.ok) return toast(d.error||'Failed to save SSO.','error');
+    document.getElementById('oidc-client-secret').value='';
+    if(oidc.clientSecret) document.getElementById('oidc-client-secret').placeholder='••••••••  (saved)';
+    toast('SSO settings saved.','success');
+  }catch(e){ toast('Network error.','error'); }
+}
+
+async function testOIDC(){
+  const issuer=document.getElementById('oidc-issuer').value.trim();
+  const result=document.getElementById('oidc-test-result');
+  if(!issuer){
+    result.textContent='Enter an issuer URL first.';
+    result.style.cssText='display:block;margin-top:14px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid var(--red);color:#e08080;background:rgba(192,57,43,.1)';
+    return;
+  }
+  result.textContent='Fetching discovery document…';
+  result.style.cssText='display:block;margin-top:14px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid var(--brass-dim);color:var(--cream-dim);background:transparent';
+  try{
+    const res=await fetch('/api/admin/settings/test-oidc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({issuer})});
+    const d=await res.json();
+    if(!res.ok){
+      result.textContent='✗ '+(d.error||'Discovery failed.');
+      result.style.cssText='display:block;margin-top:14px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid var(--red);color:#e08080;background:rgba(192,57,43,.1)';
+    } else {
+      result.innerHTML=`✓ Discovery OK<br>
+        <span style="color:var(--cream-dim)">issuer=</span>${esc(d.issuer||'')}<br>
+        <span style="color:var(--cream-dim)">authorize=</span>${esc(d.authorization_endpoint||'')}<br>
+        <span style="color:var(--cream-dim)">token=</span>${esc(d.token_endpoint||'')}<br>
+        <span style="color:var(--cream-dim)">userinfo=</span>${esc(d.userinfo_endpoint||'—')}`;
+      result.style.cssText='display:block;margin-top:14px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid #3da66e;color:#80d4aa;background:rgba(46,125,82,.08);line-height:1.7';
+    }
+  }catch(e){
+    result.textContent='✗ Network error.';
+    result.style.cssText='display:block;margin-top:14px;font-family:\'IBM Plex Mono\',monospace;font-size:.75rem;padding:10px 14px;border-left:3px solid var(--red);color:#e08080;background:rgba(192,57,43,.1)';
   }
 }
 
