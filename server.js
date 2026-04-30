@@ -1,3 +1,7 @@
+// Default to America/Chicago if no TZ is set in the environment.
+// Must run before any Date / SQLite strftime use.
+process.env.TZ = process.env.TZ || 'America/Chicago';
+
 const express        = require('express');
 const session        = require('express-session');
 const bcrypt         = require('bcryptjs');
@@ -122,7 +126,7 @@ db.exec(`
   }
   if (!entryCols.includes('transaction_date')) {
     db.prepare("ALTER TABLE entries ADD COLUMN transaction_date TEXT NOT NULL DEFAULT ''").run();
-    db.prepare("UPDATE entries SET transaction_date = strftime('%Y-%m-%d', created_at / 1000, 'unixepoch') WHERE transaction_date = ''").run();
+    db.prepare("UPDATE entries SET transaction_date = strftime('%Y-%m-%d', created_at / 1000, 'unixepoch', 'localtime') WHERE transaction_date = ''").run();
     log('info', 'db.migration', { msg: 'Added column entries.transaction_date and backfilled from created_at' });
   }
 
@@ -292,6 +296,10 @@ function requireAdmin(req, res, next) {
   if (isAdmin(req)) return next();
   res.redirect('/');
 }
+function requireWrite(req, res, next) {
+  if (req.session?.userRole === 'viewer') return res.status(403).json({ error: 'Read-only account: write actions are disabled.' });
+  next();
+}
 function page(res, f) { res.sendFile(path.join(__dirname, 'public', f)); }
 
 // ── FAVICON ────────────────────────────────────
@@ -459,7 +467,7 @@ app.get('/auth/oidc/callback', async (req, res) => {
         initials = (initBase.slice(0, 3) || 'N') + (s++);
       }
 
-      const role = ['admin', 'user'].includes(cfg.defaultRole) ? cfg.defaultRole : 'user';
+      const role = ['admin', 'user', 'viewer'].includes(cfg.defaultRole) ? cfg.defaultRole : 'user';
       const placeholderHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
       db.prepare(`INSERT INTO users (username,email,password_hash,initials,role,mfa_type,oidc_sub,oidc_provider,created_at)
                   VALUES (?,?,?,?,?,?,?,?,?)`)
@@ -853,7 +861,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
   const smtpOk  = !!getSmtpConfig()?.host;
   const allowed = smtpOk ? ['none','totp','email'] : ['none','totp'];
   const chosenMfa  = allowed.includes(mfaType) ? mfaType : 'none';
-  const chosenRole = ['admin','user'].includes(role) ? role : 'user';
+  const chosenRole = ['admin','user','viewer'].includes(role) ? role : 'user';
   if (chosenMfa === 'email' && !email) return res.status(400).json({ error: 'Email required for email MFA.' });
   try {
     const hash = await bcrypt.hash(password, 12);
@@ -894,8 +902,8 @@ app.patch('/api/admin/users/:id/reset-mfa', requireAdmin, (req, res) => {
 app.patch('/api/admin/users/:id/role', requireAdmin, (req, res) => {
   const { id } = req.params;
   const { role } = req.body;
-  if (!['admin','user'].includes(role)) return res.status(400).json({ error: 'Invalid role.' });
-  if (role === 'user') {
+  if (!['admin','user','viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role.' });
+  if (role !== 'admin') {
     const target     = db.prepare('SELECT role FROM users WHERE id=?').get(id);
     const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role='admin'").get().c;
     if (target?.role === 'admin' && adminCount <= 1) return res.status(400).json({ error: 'Cannot remove the last admin.' });
@@ -975,7 +983,7 @@ app.post('/api/admin/settings', requireAdmin, (req, res) => {
       scopes:        (oidc.scopes || 'openid profile email').trim(),
       buttonLabel:   (oidc.buttonLabel || '').trim(),
       autoProvision: !!oidc.autoProvision,
-      defaultRole:   ['admin', 'user'].includes(oidc.defaultRole) ? oidc.defaultRole : 'user',
+      defaultRole:   ['admin', 'user', 'viewer'].includes(oidc.defaultRole) ? oidc.defaultRole : 'user',
     };
     if (next.enabled && (!next.issuer || !next.clientId)) {
       return res.status(400).json({ error: 'Issuer URL and Client ID are required to enable SSO.' });
@@ -1107,7 +1115,7 @@ app.get('/api/entries', requireAuth, (_req, res) => {
   catch(e) { log('error', 'entries.fetch_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to fetch entries.' }); }
 });
 
-app.post('/api/entries', requireAuth, (req, res) => {
+app.post('/api/entries', requireAuth, requireWrite, (req, res) => {
   const { serials, checkNumber, amount, manager, department, transactionDate } = req.body;
   if (!Array.isArray(serials)||!serials.length) return res.status(400).json({ error: 'At least one serial required.' });
   if (!checkNumber)                             return res.status(400).json({ error: 'Check number required.' });
@@ -1125,7 +1133,7 @@ app.post('/api/entries', requireAuth, (req, res) => {
   } catch(e) { log('error', 'entry.create_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to create entry.' }); }
 });
 
-app.put('/api/entries/:id', requireAuth, (req, res) => {
+app.put('/api/entries/:id', requireAuth, requireWrite, (req, res) => {
   const { serials, checkNumber, amount, manager, department, transactionDate } = req.body;
   const { id } = req.params;
   if (!Array.isArray(serials)||!serials.length||!checkNumber||amount==null||!manager||!department||!transactionDate)
@@ -1140,7 +1148,7 @@ app.put('/api/entries/:id', requireAuth, (req, res) => {
   } catch(e) { log('error', 'entry.edit_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to update entry.' }); }
 });
 
-app.patch('/api/entries/:id/archive', requireAuth, (req, res) => {
+app.patch('/api/entries/:id/archive', requireAuth, requireWrite, (req, res) => {
   const { id } = req.params;
   try {
     const row = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
@@ -1154,7 +1162,7 @@ app.patch('/api/entries/:id/archive', requireAuth, (req, res) => {
   } catch(e) { log('error', 'entry.archive_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to toggle archive.' }); }
 });
 
-app.delete('/api/entries/:id', requireAuth, (req, res) => {
+app.delete('/api/entries/:id', requireAuth, requireWrite, (req, res) => {
   const { id } = req.params;
   try {
     const row = db.prepare('SELECT * FROM entries WHERE id=?').get(id);
