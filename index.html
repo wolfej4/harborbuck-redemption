@@ -512,7 +512,7 @@
             placeholder="Type a serial, press Enter…" autocomplete="off"
             onkeydown="handleSerialKey(event,'form')" oninput="handleSerialInput(event,'form')">
         </div>
-        <div class="tag-hint">Press Enter, Tab, or Space after each serial number</div>
+        <div class="tag-hint">Press Enter or Space after each serial number</div>
         <div id="serial-dupe-warn" style="display:none;margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;padding:8px 12px;background:rgba(230,126,34,.1);border-left:3px solid #e67e22;color:#e89850;line-height:1.6"></div>
       </div>
       <div class="field-group">
@@ -607,7 +607,7 @@
             placeholder="Type a serial, press Enter…" autocomplete="off"
             onkeydown="handleSerialKey(event,'edit')" oninput="handleSerialInput(event,'edit')">
         </div>
-        <div class="tag-hint">Press Enter, Tab, or Space after each serial number</div>
+        <div class="tag-hint">Press Enter or Space after each serial number</div>
       </div>
       <div class="field-group">
         <label for="e-date">Transaction Date</label>
@@ -717,7 +717,7 @@
   function handleSerialKey(e, ctx) {
     const input = e.target;
     const v = input.value.trim();
-    if (['Enter', 'Tab', ' '].includes(e.key)) {
+    if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       if (v) commitTag(ctx, v, input);
     } else if (e.key === 'Backspace' && !input.value && tagState[ctx].length > 0) {
@@ -1122,19 +1122,26 @@
     // Exclude archived entries from export; deleted entries are already gone from DB
     const toExport = entries.filter(e => e.status !== 'archived');
 
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const fmtDate = ymd => {
+      if (!ymd) return '';
+      const [y, m, d] = ymd.split('-');
+      const mi = parseInt(m, 10) - 1;
+      if (!d || isNaN(mi) || !months[mi]) return ymd;
+      return `${parseInt(d, 10)}-${months[mi]}`;
+    };
+
     const rows = [
-      ['Transaction Date', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Amount', 'Department', 'Initials'],
-      ...toExport.map(e => {
-        return [
-          e.transactionDate || '',
-          (e.serials || []).join('; '),
-          e.checkNumber,
-          e.voucherCount,
-          '$' + e.amount.toFixed(2),
-          e.department || '',
-          e.manager
-        ];
-      })
+      ['Date', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Department', 'Cost', 'Manager Initials'],
+      ...toExport.map(e => [
+        fmtDate(e.transactionDate),
+        (e.serials || []).join('; '),
+        e.checkNumber,
+        e.voucherCount,
+        e.department || '',
+        '$' + e.amount.toFixed(2),
+        e.manager,
+      ])
     ];
 
     const csv  = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
