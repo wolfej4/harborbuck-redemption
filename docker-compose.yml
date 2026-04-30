@@ -10,6 +10,7 @@ services:
     volumes:
       - /opt/appdata/harborbucks:/data
     environment:
+      - TZ=America/Chicago
       - DB_PATH=/data/harborbucks.db
       - LOG_PATH=/data/harborbucks.log
       - PORT=3000

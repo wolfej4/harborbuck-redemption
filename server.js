@@ -1,3 +1,7 @@
+// Default to America/Chicago if no TZ is set in the environment.
+// Must run before any Date / SQLite strftime use.
+process.env.TZ = process.env.TZ || 'America/Chicago';
+
 const express        = require('express');
 const session        = require('express-session');
 const bcrypt         = require('bcryptjs');
@@ -122,7 +126,7 @@ db.exec(`
   }
   if (!entryCols.includes('transaction_date')) {
     db.prepare("ALTER TABLE entries ADD COLUMN transaction_date TEXT NOT NULL DEFAULT ''").run();
-    db.prepare("UPDATE entries SET transaction_date = strftime('%Y-%m-%d', created_at / 1000, 'unixepoch') WHERE transaction_date = ''").run();
+    db.prepare("UPDATE entries SET transaction_date = strftime('%Y-%m-%d', created_at / 1000, 'unixepoch', 'localtime') WHERE transaction_date = ''").run();
     log('info', 'db.migration', { msg: 'Added column entries.transaction_date and backfilled from created_at' });
   }
 
