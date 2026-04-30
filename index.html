@@ -378,6 +378,12 @@
 
   .action-cell { display: flex; gap: 6px; }
 
+  /* Read-only / viewer accounts: hide write controls */
+  body.viewer-mode .form-section,
+  body.viewer-mode .bulk-bar,
+  body.viewer-mode .check-col,
+  body.viewer-mode .actions-col { display: none !important; }
+
   .btn-sm {
     font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
     letter-spacing: 0.08em; text-transform: uppercase;
@@ -581,7 +587,7 @@
           <th>Amount</th>
           <th>Department</th>
           <th>Initials</th>
-          <th>Actions</th>
+          <th class="actions-col">Actions</th>
         </tr>
       </thead>
       <tbody id="ledger-body"></tbody>
@@ -671,7 +677,8 @@
       ]);
       myInitials  = me.initials || '';
       allInitials = initialsData;
-      if (me.role === 'admin') document.getElementById('admin-link').style.display = 'inline-block';
+      if (me.role === 'admin')  document.getElementById('admin-link').style.display = 'inline-block';
+      if (me.role === 'viewer') document.body.classList.add('viewer-mode');
       populateInitialsSelects();
     } catch (e) { console.error('Failed to load user data', e); }
   }
@@ -908,7 +915,7 @@
         <td class="amount">$${e.amount.toFixed(2)}</td>
         <td>${esc(e.department || '—')}</td>
         <td><span style="font-family:'IBM Plex Mono',monospace;font-size:.78rem;background:rgba(196,154,60,.12);border:1px solid rgba(196,154,60,.25);color:var(--brass-light);padding:2px 8px">${esc(e.manager)}</span></td>
-        <td><div class="action-cell">
+        <td class="actions-col"><div class="action-cell">
           ${isActive ? `<button class="btn-sm btn-edit" onclick="openEdit('${e.id}')">Edit</button>` : ''}
           ${isActive ? `<button class="btn-sm btn-archive" onclick="toggleStatus('${e.id}','archive')">Archive</button>` : ''}
           ${isActive ? `<button class="btn-sm btn-delete" onclick="deleteEntry('${e.id}')">Delete</button>` : ''}

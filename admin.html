@@ -38,6 +38,9 @@ td{font-family:'IBM Plex Mono',monospace;font-size:.82rem;padding:11px 12px;colo
 .role-badge{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px}
 .role-badge.admin{background:rgba(196,154,60,.15);color:var(--brass);border:1px solid rgba(196,154,60,.3)}
 .role-badge.user{background:rgba(176,166,148,.08);color:var(--cream-dim);border:1px solid rgba(176,166,148,.2)}
+.role-badge.viewer{background:rgba(46,82,125,.15);color:#80b4e0;border:1px solid rgba(46,82,125,.3)}
+.role-select{background:var(--navy-light);border:1px solid var(--rule);color:var(--cream);font-family:'IBM Plex Mono',monospace;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;cursor:pointer;outline:none}
+.role-select:focus{border-color:var(--brass-dim)}
 .mfa-badge{font-size:.62rem;letter-spacing:.08em;padding:2px 8px;border:1px solid}
 .mfa-badge.totp{color:#80d4aa;background:rgba(46,125,82,.15);border-color:rgba(46,125,82,.3)}
 .mfa-badge.email{color:#80b4e0;background:rgba(46,82,125,.15);border-color:rgba(46,82,125,.3)}
@@ -147,7 +150,7 @@ select option{background:var(--navy-mid)}
         <div class="field"><label>Email</label><input id="nu-email" type="email" placeholder="optional" autocomplete="off"></div>
         <div class="field"><label>Password</label><input id="nu-password" type="password" placeholder="min 8 chars" autocomplete="off"></div>
         <div class="field"><label>Role</label>
-          <select id="nu-role"><option value="user">User</option><option value="admin">Admin</option></select>
+          <select id="nu-role"><option value="user">User</option><option value="admin">Admin</option><option value="viewer">Viewer (read-only)</option></select>
         </div>
         <div class="field"><label>MFA</label>
           <select id="nu-mfa">
@@ -293,6 +296,7 @@ select option{background:var(--navy-mid)}
           <select id="oidc-default-role">
             <option value="user">User</option>
             <option value="admin">Admin</option>
+            <option value="viewer">Viewer (read-only)</option>
           </select>
         </div>
       </div>
@@ -564,7 +568,11 @@ function renderUsers(){
       <td><div class="action-cell">
         <button class="btn-sm btn-pw" onclick="openResetPw(${u.id})">Reset PW</button>
         <button class="btn-sm btn-mfa" onclick="resetMFA(${u.id},'${esc(u.username)}')">Reset MFA</button>
-        <button class="btn-sm btn-role" onclick="toggleRole(${u.id},'${u.role}','${esc(u.username)}')">${u.role==='admin'?'Make User':'Make Admin'}</button>
+        <select class="role-select" onchange="setRole(${u.id}, this.value, '${esc(u.username)}', '${u.role}')" title="Change role">
+          <option value="admin"  ${u.role==='admin'?'selected':''}>Admin</option>
+          <option value="user"   ${u.role==='user'?'selected':''}>User</option>
+          <option value="viewer" ${u.role==='viewer'?'selected':''}>Viewer</option>
+        </select>
         ${u.id!==myId?`<button class="btn-sm btn-del" onclick="deleteUser(${u.id},'${esc(u.username)}')">Delete</button>`:''}
       </div></td>
     </tr>`).join('');
@@ -617,16 +625,16 @@ async function resetMFA(id,username){
   }catch(e){ toast('Network error.','error'); }
 }
 
-async function toggleRole(id,currentRole,username){
-  const newRole=currentRole==='admin'?'user':'admin';
-  if(!confirm(`Change ${username} to ${newRole}?`)) return;
+async function setRole(id,newRole,username,currentRole){
+  if(newRole===currentRole) return;
+  if(!confirm(`Change ${username} to ${newRole}?`)) { renderUsers(); return; }
   try{
     const res=await fetch(`/api/admin/users/${id}/role`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:newRole})});
     const d=await res.json();
-    if(!res.ok) return toast(d.error||'Failed.','error');
+    if(!res.ok){ toast(d.error||'Failed.','error'); renderUsers(); return; }
     const u=users.find(x=>x.id===id); if(u){ u.role=newRole; } renderUsers();
     toast(`Role updated to ${newRole}.`,'success');
-  }catch(e){ toast('Network error.','error'); }
+  }catch(e){ toast('Network error.','error'); renderUsers(); }
 }
 
 async function deleteUser(id,username){
