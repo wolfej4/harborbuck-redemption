@@ -512,7 +512,7 @@
             placeholder="Type a serial, press Enter…" autocomplete="off"
             onkeydown="handleSerialKey(event,'form')" oninput="handleSerialInput(event,'form')">
         </div>
-        <div class="tag-hint">Press Enter, Tab, or Space after each serial number</div>
+        <div class="tag-hint">Press Enter or Space after each serial number</div>
         <div id="serial-dupe-warn" style="display:none;margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;padding:8px 12px;background:rgba(230,126,34,.1);border-left:3px solid #e67e22;color:#e89850;line-height:1.6"></div>
       </div>
       <div class="field-group">
@@ -607,7 +607,7 @@
             placeholder="Type a serial, press Enter…" autocomplete="off"
             onkeydown="handleSerialKey(event,'edit')" oninput="handleSerialInput(event,'edit')">
         </div>
-        <div class="tag-hint">Press Enter, Tab, or Space after each serial number</div>
+        <div class="tag-hint">Press Enter or Space after each serial number</div>
       </div>
       <div class="field-group">
         <label for="e-date">Transaction Date</label>
@@ -717,7 +717,7 @@
   function handleSerialKey(e, ctx) {
     const input = e.target;
     const v = input.value.trim();
-    if (['Enter', 'Tab', ' '].includes(e.key)) {
+    if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       if (v) commitTag(ctx, v, input);
     } else if (e.key === 'Backspace' && !input.value && tagState[ctx].length > 0) {
