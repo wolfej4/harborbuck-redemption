@@ -661,7 +661,7 @@
   async function init() {
     updateDateHeader();
     setInterval(updateDateHeader, 30000);
-    document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('f-date').value = localDateStr();
     document.getElementById('edit-modal').addEventListener('click', function(e) {
       if (e.target === this) closeModal();
     });
@@ -1035,7 +1035,7 @@
 
   function clearForm() {
     ['f-check','f-amount'].forEach(id => { document.getElementById(id).value = ''; });
-    document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('f-date').value = localDateStr();
     document.getElementById('f-department').value = '';
     document.getElementById('f-manager').value = myInitials;
     const warn = document.getElementById('serial-dupe-warn');
@@ -1156,7 +1156,7 @@
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = `harborbucks-${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `harborbucks-${localDateStr()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast('CSV exported.');
@@ -1164,6 +1164,14 @@
 
   // ── HELPERS ───────────────────────────────────
   function val(id) { return document.getElementById(id).value.trim(); }
+
+  // Local-zone YYYY-MM-DD (avoids the UTC drift of toISOString().slice(0,10)).
+  function localDateStr(d = new Date()) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
 
   function esc(str) {
     return String(str)

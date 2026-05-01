@@ -125,6 +125,14 @@ Chart.defaults.font.size = 11;
 let allEntries = [];
 let charts = {};
 
+// Local-zone YYYY-MM-DD (avoids the UTC drift of toISOString().slice(0,10)).
+function localDateStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 async function init() {
   try {
     const res = await fetch('/api/entries');
@@ -144,11 +152,11 @@ function refresh() {
   const now = Date.now();
   const cutoff = days > 0 ? now - days * 86400000 : 0;
 
-  const cutoffDate = days > 0 ? new Date(now - days * 86400000).toISOString().slice(0,10) : '';
+  const cutoffDate = days > 0 ? localDateStr(new Date(now - days * 86400000)) : '';
 
   const filtered = allEntries.filter(e => {
     if (e.status !== 'active') return false;
-    const td = e.transactionDate || new Date(e.createdAt).toISOString().slice(0,10);
+    const td = e.transactionDate || localDateStr(new Date(e.createdAt));
     if (cutoffDate && td < cutoffDate) return false;
     if (dept && e.department !== dept) return false;
     return true;
@@ -180,7 +188,7 @@ function updateSummary(data) {
 }
 
 function txDateStr(e) {
-  return e.transactionDate || new Date(e.createdAt).toISOString().slice(0,10);
+  return e.transactionDate || localDateStr(new Date(e.createdAt));
 }
 
 function bucketByDate(data, days) {
@@ -202,7 +210,7 @@ function bucketByDate(data, days) {
   if (fmt === 'day') {
     const start = days > 0 ? new Date(Date.now() - days * 86400000) : new Date(Math.min(...data.map(e => new Date(txDateStr(e)).getTime())));
     for (let d = new Date(start); d <= now; d.setDate(d.getDate()+1)) {
-      const key = d.toISOString().slice(0,10);
+      const key = localDateStr(d);
       if (!map[key]) map[key] = { count: 0, amount: 0, vouchers: 0 };
     }
   }

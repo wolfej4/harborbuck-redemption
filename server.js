@@ -1096,8 +1096,10 @@ app.get('/api/admin/audit', requireAdmin, (req, res) => {
 
 app.get('/api/admin/logs/download', requireAdmin, (req, res) => {
   if (!fs.existsSync(LOG_PATH)) return res.status(404).send('No log file yet.');
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   res.setHeader('Content-Type', 'text/plain');
-  res.setHeader('Content-Disposition', `attachment; filename="harborbucks-${new Date().toISOString().slice(0,10)}.log"`);
+  res.setHeader('Content-Disposition', `attachment; filename="harborbucks-${today}.log"`);
   fs.createReadStream(LOG_PATH).pipe(res);
 });
 
