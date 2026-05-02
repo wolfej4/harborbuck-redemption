@@ -1112,6 +1112,12 @@ function rowToEntry(r) {
 }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
+// Sort serials low → high. Uses numeric collation so "9" < "10".
+const serialCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+function sortSerials(arr) {
+  return [...arr].map(s => String(s).trim()).sort((a, b) => serialCollator.compare(a, b));
+}
+
 app.get('/api/entries', requireAuth, (_req, res) => {
   try { res.json(db.prepare('SELECT * FROM entries ORDER BY transaction_date DESC, created_at DESC').all().map(rowToEntry)); }
   catch(e) { log('error', 'entries.fetch_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to fetch entries.' }); }
@@ -1126,11 +1132,12 @@ app.post('/api/entries', requireAuth, requireWrite, (req, res) => {
   if (!department)                              return res.status(400).json({ error: 'Department required.' });
   if (!transactionDate)                         return res.status(400).json({ error: 'Transaction date required.' });
   try {
-    const e = { id: uid(), serials: JSON.stringify(serials), check_number: checkNumber,
-      voucher_count: serials.length, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), department, transaction_date: transactionDate, voided: 0, status: 'active', created_at: Date.now() };
+    const sortedSerials = sortSerials(serials);
+    const e = { id: uid(), serials: JSON.stringify(sortedSerials), check_number: checkNumber,
+      voucher_count: sortedSerials.length, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), department, transaction_date: transactionDate, voided: 0, status: 'active', created_at: Date.now() };
     db.prepare('INSERT INTO entries (id,serials,check_number,voucher_count,amount,manager,department,transaction_date,voided,status,created_at) VALUES (@id,@serials,@check_number,@voucher_count,@amount,@manager,@department,@transaction_date,@voided,@status,@created_at)').run(e);
     const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
-    log('info', 'entry.created', { user: username, manager, checkNumber, amount: parseFloat(amount), serials });
+    log('info', 'entry.created', { user: username, manager, checkNumber, amount: parseFloat(amount), serials: sortedSerials });
     res.status(201).json(rowToEntry(e));
   } catch(e) { log('error', 'entry.create_fail', { msg: e.message }); res.status(500).json({ error: 'Failed to create entry.' }); }
 });
@@ -1141,8 +1148,9 @@ app.put('/api/entries/:id', requireAuth, requireWrite, (req, res) => {
   if (!Array.isArray(serials)||!serials.length||!checkNumber||amount==null||!manager||!department||!transactionDate)
     return res.status(400).json({ error: 'All fields required.' });
   try {
+    const sortedSerials = sortSerials(serials);
     const result = db.prepare('UPDATE entries SET serials=@serials,check_number=@check_number,voucher_count=@voucher_count,amount=@amount,manager=@manager,department=@department,transaction_date=@transaction_date WHERE id=@id')
-      .run({ id, serials: JSON.stringify(serials), check_number: checkNumber, voucher_count: serials.length, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), department, transaction_date: transactionDate });
+      .run({ id, serials: JSON.stringify(sortedSerials), check_number: checkNumber, voucher_count: sortedSerials.length, amount: parseFloat(amount), manager: manager.trim().toUpperCase(), department, transaction_date: transactionDate });
     if (!result.changes) return res.status(404).json({ error: 'Entry not found.' });
     const username = db.prepare('SELECT username FROM users WHERE id=?').get(req.session.userId)?.username;
     log('info', 'entry.edited', { user: username, entryId: id, checkNumber, amount: parseFloat(amount) });
