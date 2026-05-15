@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/icon.svg">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -246,6 +247,19 @@
   .btn-ghost:hover { border-color: var(--brass-dim); color: var(--cream); }
   .btn-export { background: transparent; color: var(--brass); border: 1px solid var(--brass-dim); margin-left: auto; }
   .btn-export:hover { background: rgba(196,154,60,0.1); }
+  .export-dropdown { position: relative; margin-left: auto; }
+  .export-dropdown .export-menu {
+    display: none; position: absolute; right: 0; top: calc(100% + 4px);
+    background: var(--navy-mid); border: 1px solid var(--brass-dim); border-radius: 6px;
+    min-width: 140px; z-index: 200; overflow: hidden;
+  }
+  .export-dropdown.open .export-menu { display: block; }
+  .export-menu button {
+    display: block; width: 100%; padding: 8px 14px; background: none;
+    border: none; color: var(--cream); font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem; letter-spacing: 0.06em; text-align: left; cursor: pointer;
+  }
+  .export-menu button:hover { background: rgba(196,154,60,0.15); color: var(--brass-light); }
 
   /* ── TAG INPUT ─────────────────────────────────── */
   .tag-input-wrap {
@@ -565,7 +579,13 @@
           <input type="checkbox" id="show-archived" onchange="renderTable()">
           Show archived
         </label>
-        <button class="btn btn-sm btn-export" onclick="exportCSV()">↓ Export CSV</button>
+        <div class="export-dropdown" id="export-dropdown">
+          <button class="btn btn-sm btn-export" onclick="toggleExportMenu(event)">↓ Export</button>
+          <div class="export-menu">
+            <button onclick="exportCSV();closeExportMenu()">CSV (.csv)</button>
+            <button onclick="exportXLSX();closeExportMenu()">Excel (.xlsx)</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="bulk-bar" id="bulk-bar">
@@ -1167,6 +1187,56 @@
     URL.revokeObjectURL(url);
     toast('CSV exported.');
   }
+
+  // ── XLSX EXPORT ───────────────────────────────
+  function exportXLSX() {
+    const toExport = entries.filter(e => e.status !== 'archived');
+
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const fmtDate = ymd => {
+      if (!ymd) return '';
+      const [y, m, d] = ymd.split('-');
+      const mi = parseInt(m, 10) - 1;
+      if (!d || isNaN(mi) || !months[mi]) return ymd;
+      return `${parseInt(d, 10)}-${months[mi]}`;
+    };
+
+    const rows = [
+      ['Date', 'Serial Numbers', 'Check Number', 'Voucher Count', 'Department', 'Cost', 'Manager Initials'],
+      ...toExport.map(e => [
+        fmtDate(e.transactionDate),
+        (e.serials || []).join('; '),
+        e.checkNumber,
+        e.voucherCount,
+        e.department || '',
+        e.amount,
+        e.manager,
+      ])
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    // Format the Cost column (G) as currency starting from row 2
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let r = 1; r <= range.e.r; r++) {
+      const cell = ws[XLSX.utils.encode_cell({ r, c: 5 })];
+      if (cell) cell.z = '"$"#,##0.00';
+    }
+    ws['!cols'] = [12, 30, 14, 14, 16, 12, 16].map(wch => ({ wch }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Harborbucks');
+    XLSX.writeFile(wb, `harborbucks-${localDateStr()}.xlsx`);
+    toast('XLSX exported.');
+  }
+
+  function toggleExportMenu(e) {
+    e.stopPropagation();
+    document.getElementById('export-dropdown').classList.toggle('open');
+  }
+  function closeExportMenu() {
+    document.getElementById('export-dropdown').classList.remove('open');
+  }
+  document.addEventListener('click', closeExportMenu);
 
   // ── HELPERS ───────────────────────────────────
   function val(id) { return document.getElementById(id).value.trim(); }
