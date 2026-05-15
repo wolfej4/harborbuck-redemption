@@ -155,7 +155,7 @@ function refresh() {
   const cutoffDate = days > 0 ? localDateStr(new Date(now - days * 86400000)) : '';
 
   const filtered = allEntries.filter(e => {
-    if (e.status !== 'active') return false;
+    if (e.status === 'deleted') return false;
     const td = e.transactionDate || localDateStr(new Date(e.createdAt));
     if (cutoffDate && td < cutoffDate) return false;
     if (dept && e.department !== dept) return false;
