@@ -816,11 +816,11 @@
   }
 
   function renderSummary() {
-    const active = entries.filter(e => e.status === 'active');
-    const totalAmount   = active.reduce((s, e) => s + e.amount, 0);
-    const totalVouchers = active.reduce((s, e) => s + e.voucherCount, 0);
+    const active        = entries.filter(e => e.status === 'active');
+    const totalAmount   = entries.reduce((s, e) => s + e.amount, 0);
+    const totalVouchers = entries.reduce((s, e) => s + e.voucherCount, 0);
     const archivedCount = entries.filter(e => e.status === 'archived').length;
-    const avg = active.length ? totalAmount / active.length : 0;
+    const avg = entries.length ? totalAmount / entries.length : 0;
 
     document.getElementById('stat-total').textContent     = '$' + totalAmount.toFixed(2);
     document.getElementById('stat-vouchers').textContent  = totalVouchers;
