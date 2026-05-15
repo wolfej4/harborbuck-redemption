@@ -1018,6 +1018,9 @@
     if (!department) return toast('Select a department.', true);
     if (!manager) return toast('Select manager initials.', true);
 
+    serials.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    renderTags('form');
+
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
     try {
@@ -1107,6 +1110,9 @@
     if (!serials.length) return toast('At least one serial number is required.', true);
     if (!transactionDate || !checkNumber || isNaN(amount) || !department || !manager)
       return toast('All fields are required.', true);
+
+    serials.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    renderTags('edit');
 
     const btn = document.getElementById('save-btn');
     btn.disabled = true;
